@@ -13,3 +13,11 @@ This repo is a collection of public userscripts created by me. Check out the REA
 ## Userscripts in _other_ repos
 
 - [__KissMAL__](https://github.com/josefandersson/KissMAL) - Adds links on myanimelist for streaming/reading animes/mangas on kissanime/kissmanga.
+
+## Installation
+
+Userscripts are not standalone plugins/extensions for your browser, instead they run within a userscript manager, which is a plugin/extension. Therefore you will need to install one of those userscript managers before installing userscripts.
+
+I recommend [Tempermonkey for Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) and [Greasemonkey for Firefox](https://addons.mozilla.org/sv-SE/firefox/addon/greasemonkey/).
+
+When you have installed the userscript manager you will be able to install userscripts. This can be done manually by copying the userscript code into the userscript managers dashboard OR by visiting a url ending with .user.js (eg. hello-world.user.js). The latter is recommended because then you will also receive automatic updated for the userscript.
