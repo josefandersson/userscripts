@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HF Safe For Work
 // @namespace    https://github.com/josefandersson/userscripts
-// @version      1.4
+// @version      1.41
 // @description  Options to filter elements on hackforums.net
 // @author       DrDoof
 // @icon         https://hackforums.net/favicon.ico
