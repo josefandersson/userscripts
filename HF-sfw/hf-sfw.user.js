@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HF Safe For Work
 // @namespace    https://github.com/josefandersson/userscripts
-// @version      1.41
+// @version      1.42
 // @description  Options to filter elements on hackforums.net
 // @author       DrDoof
 // @icon         https://hackforums.net/favicon.ico
@@ -12,7 +12,7 @@
 // ==/UserScript==
 
 GM.getValue('config').then(val => {
-    const config = val || {}
+    const config = val || { filterTitle:true, hideLogo:true, hideProfilePics:false, hideSigPics:false, hidePostPics:false }
 
     const styleElement = document.createElement('style')
     function createCSS() {
