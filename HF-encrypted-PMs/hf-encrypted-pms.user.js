@@ -2,8 +2,9 @@
 // @name         HF Encrypted PMs
 // @namespace    https://github.com/josefandersson/userscripts
 // @version      1.0.5
-// @author       DrDoof
 // @description  Encrypt your PMs with PGP encryption.
+// @author       DrDoof
+// @icon         https://hackforums.net/favicon.ico
 // @match        https://hackforums.net/private.php*
 // @require      https://github.com/openpgpjs/openpgpjs/raw/master/dist/openpgp.min.js
 // @resource     MainCSS https://github.com/josefandersson/userscripts/raw/master/HF-encrypted-PMs/style.css
