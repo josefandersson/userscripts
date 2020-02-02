@@ -6,6 +6,7 @@ This repo is a collection of public userscripts created by me. Check out the REA
 
 - [__HF-keyboard-shortcuts__](https://github.com/josefandersson/userscripts/tree/master/HF-keyboard-shortcuts) - Navigate hackforums using keyboard shortcuts.
 - ~~[__HF-not-yet-repped__](https://github.com/josefandersson/userscripts/tree/master/HF-not-yet-repped) - Fetch a list of upgraded members you have not yet given a rep on hackforums.~~ ___outdated___
+- [__HF-quote-images__](https://github.com/josefandersson/userscripts/tree/master/HF-quote-images) - Automatically put quoted images into spoiler tags.
 - [__HF-real-ignore-user__](https://github.com/josefandersson/userscripts/tree/master/HF-real-ignore-user) - Remove the posts of users you ignore completely and not just hide them.
 - [__HF-sfw__](https://github.com/josefandersson/userscripts/tree/master/HF-sfw) - Adds options to filter elements on hackforums. (title, logo, profile pics,...)
 - [__ifrågasätt-gets-rekt__](https://github.com/josefandersson/userscripts/tree/master/ifrågasätt-gets-rekt) - Manipulate ratings on others' comments on Swedish news sites if they are using Ifrågasätt AB comments.
