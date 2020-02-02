@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HF Safe For Work
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/HF-sfw
-// @version      1.44
+// @version      1.45
 // @description  Options to filter elements on hackforums.net
 // @author       DrDoof
 // @icon         https://hackforums.net/favicon.ico
@@ -44,7 +44,7 @@ GM.getValue('config').then(val => {
         container.className = 'hf-sfw'
 
         const addOption = (id, txt, configKey) => {
-            let input = document.createElement('input')
+            const input = document.createElement('input')
             input.type = 'checkbox'
             input.id = id
             input.checked = config[configKey]
