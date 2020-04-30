@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HF Title Alerts
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/HF-title-alerts
-// @version      1.1
+// @version      1.2
 // @description  Adds an alert indicator to the page title.
 // @author       DrDoof
 // @icon         https://hackforums.net/favicon.ico
@@ -40,7 +40,8 @@ try {
     GM_addValueChangeListener('clearalerts', (key, oldVal, newVal, isRemote) => {
         if (isRemote) {
             if (lastAlertUpdate < newVal) {
-                unsafeWindow.Notify.alerts = 0
+                unsafeWindow.Notify.notifyOpen = true
+                unsafeWindow.Notify.processIconClick()
                 updateTitle()
             }
         }
