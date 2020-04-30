@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HF Safe For Work
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/HF-sfw
-// @version      1.45
+// @version      1.46
 // @description  Options to filter elements on hackforums.net
 // @author       DrDoof
 // @icon         https://hackforums.net/favicon.ico
@@ -15,7 +15,7 @@ GM.getValue('config').then(val => {
     const config = val || { filterTitle:true, hideLogo:true, hideProfilePics:false, hideSigPics:false, hidePostPics:false }
 
     const styleElement = document.createElement('style')
-    function createCSS() {
+    const createCSS = () => {
         let css = '.hf-sfw { float:right; display:flex; line-height:18px; } .hf-sfw label { cursor:pointer; } .hf-sfw input { margin:3px 3px 3px 8px; cursor:pointer; }'
     
         with (config) {
@@ -36,7 +36,8 @@ GM.getValue('config').then(val => {
                 }
             }
         }, 5)
-    }createCSS()
+    }
+    createCSS()
 
     document.addEventListener('DOMContentLoaded', () => {
         const parent = document.querySelector('#footer > .lower > .wrapper')
