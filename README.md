@@ -10,7 +10,7 @@ This repo is a collection of public userscripts created by me. Check out the REA
 - [__HF-real-ignore-user__](https://github.com/josefandersson/userscripts/tree/master/HF-real-ignore-user) - Remove the posts of users you ignore completely and not just hide them.
 - [__HF-sfw__](https://github.com/josefandersson/userscripts/tree/master/HF-sfw) - Adds options to filter elements on hackforums. (title, logo, profile pics,...)
 - [__HF-title-alerts__](https://github.com/josefandersson/userscripts/tree/master/HF-title-alerts) - Adds an alert indicator to the page title.
-- [__ifrågasätt-gets-rekt__](https://github.com/josefandersson/userscripts/tree/master/ifrågasätt-gets-rekt) - Manipulate ratings on others' comments on Swedish news sites if they are using Ifrågasätt AB comments.
+- ~~[__ifrågasätt-gets-rekt__](https://github.com/josefandersson/userscripts/tree/master/ifrågasätt-gets-rekt) - Manipulate ratings on others' comments on Swedish news sites if they are using Ifrågasätt AB comments.~~ ___outdated___
 - [__travian-enhanced__](https://github.com/josefandersson/userscripts/tree/master/travian-enhanced) - Enhance the Travian experience with keyboard shortcuts and useful tools.
 - [__instagram-better-player__](https://github.com/josefandersson/userscripts/tree/master/instagram-better-player) - Exposes the default video player on Instagram videos to allow for volume change and seeking. Also contains some extra QoL features.
 
