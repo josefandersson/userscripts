@@ -1,6 +1,9 @@
 # YouTube Slightly Better
 
-A bitter attempt at making the YouTube experience better. This script adds a few extra features that I've seen no other "YouTube enhancement" scripts add. Each feature can be toggled in the settings. All available features:
+A bitter attempt at making the YouTube experience better. This script adds a few extra features that I've seen no other "YouTube enhancement" scripts add. Each feature can be toggled in the settings.
+
+## Features
+
 | Feature | Description | Key bindings | Enabled by default |
 | --- | --- | :---: | :---: |
 | Playback Rate | Way faster method of changing playback rate and with better precision (default 5% steps). | a, s, d | yes |

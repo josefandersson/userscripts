@@ -2,7 +2,7 @@
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
 // @version      1.0
-// @description  Adds some useful controls to YouTube
+// @description  Adds some extra features to YouTube
 // @author       DrDoof
 // @match        https://www.youtube.com/*
 // @icon         https://youtube.com/favicon.ico
