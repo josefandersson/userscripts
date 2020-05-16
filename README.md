@@ -13,6 +13,7 @@ This repo is a collection of public userscripts created by me. Check out the REA
 - ~~[__ifrågasätt-gets-rekt__](https://github.com/josefandersson/userscripts/tree/master/ifrågasätt-gets-rekt) - Manipulate ratings on others' comments on Swedish news sites if they are using Ifrågasätt AB comments.~~ ___outdated___
 - [__travian-enhanced__](https://github.com/josefandersson/userscripts/tree/master/travian-enhanced) - Enhance the Travian experience with keyboard shortcuts and useful tools.
 - [__instagram-better-player__](https://github.com/josefandersson/userscripts/tree/master/instagram-better-player) - Exposes the default video player on Instagram videos to allow for volume change and seeking. Also contains some extra QoL features.
+- [__youtube-slightly-better__](https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better) - Adds some extra features to YouTube.
 
 ## Userscripts in _other_ repos
 
