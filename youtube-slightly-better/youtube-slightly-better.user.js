@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.0
+// @version      1.1
 // @description  Adds some extra features to YouTube
 // @author       DrDoof
 // @match        https://www.youtube.com/*
@@ -13,11 +13,14 @@
 // @run-at       document-start
 // ==/UserScript==
 
-// TODO: Playlists: reverse, shuffle
-//       Disable autoplaying 'channel trailer' video on channel page
-//       Minimize player when scrolling down
+// FIXME: - Opening video in new tab will not autoplay the video, but it will
+//          still add the video to history if tab is opened for more than 10 seconds
+// TODO:  - Add a percentage indicator of video progress
+//        - Playlists: reverse, shuffle
+//        - Disable autoplaying 'channel trailer' video on channel page
+//        - Minimize player when scrolling down
 
-const ENABLED_MODULES = ['mModulePlaybackRate', 'mOpenThumbnail', 'mScreenShot', 'mGoToTimestamp', 'mModuleHistory'];
+const ENABLED_MODULES = ['mProgress', 'mModulePlaybackRate', 'mOpenThumbnail', 'mScreenShot', 'mGoToTimestamp', 'mModuleHistory'];
 
 const MIN_PLAYBACK_RATE = .1;
 const MAX_PLAYBACK_RATE = 3;
@@ -319,9 +322,28 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     }
 
 
-
-
-
+    // =====================
+    // Progress Module
+    // =====================
+    //
+    // - Print the video progress as percentage.
+    //
+    mModule.mProgress = class mProgress extends mModule {
+        constructor() {
+            super();
+            this.progress = this.addItem(new mItemTxt(this, '0%'));
+            this.percent = 0;
+            video.addEventListener('loadeddata', ev => this.updateProgression());
+            video.addEventListener('timeupdate', ev => this.updateProgression());
+        }
+        updateProgression() {
+            const newPercentage = Math.round(video.currentTime / video.duration * 100);
+            if (newPercentage !== this.percent) {
+                this.percent = newPercentage;
+                this.progress.element.innerText = `${this.percent}%`;
+            }
+        }
+    }
 
 
 
@@ -419,6 +441,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
         title.parentElement.insertBefore(container, title);
     }
 
+    // TODO: If current page isn't a watch page maybe we should wait some other way?
     let id = setInterval(() => {
         if (!title) title = document.querySelector('#container>.title');
         if (!video) video = document.querySelector('video');
