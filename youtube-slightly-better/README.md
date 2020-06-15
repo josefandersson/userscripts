@@ -11,6 +11,7 @@ A bitter attempt at making the YouTube experience better. This script adds a few
 | Go To Timestamp | Prompts the user to type a timestamp to jump to. | g | yes |
 | Open Thumbnail | Open video thumbnail in new tab. | b | yes |
 | History | Remember all watched videos and print how many times current video has been watched. | | yes |
+| Progress | Show a progress percentage below the video. | - | yes |
 
 ## Installation
 
