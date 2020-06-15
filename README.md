@@ -14,6 +14,7 @@ This repo is a collection of public userscripts created by me. Check out the REA
 - [__instagram-better-player__](https://github.com/josefandersson/userscripts/tree/master/instagram-better-player) - Exposes the default video player on Instagram videos to allow for volume change and seeking. Also contains some extra QoL features.
 - [__travian-enhanced__](https://github.com/josefandersson/userscripts/tree/master/travian-enhanced) - Enhance the Travian experience with keyboard shortcuts and useful tools.
 - [__youtube-slightly-better__](https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better) - Adds some extra features to YouTube.
+- [__VSCO-simple-download__](https://github.com/josefandersson/userscripts/tree/master/VSCO-simple-download) - Makes it easy to download images from VSCO.
 
 ## Userscripts in _other_ repos
 
