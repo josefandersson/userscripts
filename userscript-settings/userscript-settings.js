@@ -1,3 +1,8 @@
+// TODO:  - Finish the import feature.
+//        - Implement the 'requires' feature.
+//        - Add types: date, range, textarea, radio
+
+
 if (typeof UserscriptSettings === 'undefined') {
     const cr = (tagName, obj) => Object.assign(document.createElement(tagName), obj || {});
 
@@ -52,7 +57,7 @@ if (typeof UserscriptSettings === 'undefined') {
         let obj = traverseObject(this.vars.settings, ...expandedPath);
         let out = {};
         forObject(obj, ([key, val], ...path) => {
-            if (val.currentValue != null)
+            if (val != null && val.currentValue != null)
                 setObjectValue(out, val.currentValue, ...path.filter(val => val !== 'settings'));
         });
         return out;
@@ -75,12 +80,13 @@ if (typeof UserscriptSettings === 'undefined') {
     };
 
     UserscriptSettings.importPrompt = function() {
-        const jsonStr = prompt('Paste JSON data to import:');
+        const jsonStr = prompt('JSON data to import:');
         try {
             const json = JSON.parse(jsonStr);
             this.import(json);
         } catch (e) {
             console.log('Invalid JSON');
+            alert('Invalid JSON');
         }
     };
 
@@ -100,8 +106,8 @@ if (typeof UserscriptSettings === 'undefined') {
 
         const construct = (settings, parent='') => {
             const container = cr('div');
-
-            Object.entries(settings).forEach(([key, val]) => {
+            const sorted = Object.entries(settings).sort(([aKey, aVal], [bKey, bVal]) => (aVal.label || aKey).toLowerCase() < (bVal.label || bKey).toLowerCase() ? -1 : 1);
+            sorted.forEach(([key, val]) => {
                 const pathStr = `${parent}${key}`;
                 if (val.settings) {
                     const p = cr('p', { innerText:val.label || key });
@@ -197,7 +203,7 @@ if (typeof UserscriptSettings === 'undefined') {
     UserscriptSettings.save = function() {
         let changedPaths = [];
         forObject(this.vars.settings, ([key, val], ...path) => {
-            if (val.unsavedValue != null && val.unsavedValue != val.currentValue) {
+            if (val != null && val.unsavedValue != null && val.unsavedValue != val.currentValue) {
                 val.currentValue = val.unsavedValue;
                 delete val.unsavedValue;
                 changedPaths.push(path.filter(key => key !== 'settings'));
@@ -222,46 +228,6 @@ if (typeof UserscriptSettings === 'undefined') {
             this.show();
         }
     };
-}
 
-/*
-UserscriptSettings.create({
-    my_userscript: {
-        label: 'My Userscript',
-        settings: {
-            refresh: {
-                label: 'Autorefresh',
-                type: 'checkbox',
-                defaultValue: true,
-                currentValue: false
-            },
-            mode: {
-                label: 'Mode',
-                type: 'select',
-                options: ['Single', 'Multiple', 'Auto'],
-                defaultValue: 'Auto',
-                currentValue: 'Single'
-            },
-            appearance: {
-                label: 'Appearance',
-                settings: {
-                    useTheme: {
-                        label: 'Use theme',
-                        type: 'checkbox',
-                        defaultValue: true,
-                        currentValue: true
-                    },
-                    theme: {
-                        label: 'Theme',
-                        type: 'select',
-                        options: ['Zebra', 'Tomorrow', 'Autumn'],
-                        defaultValue: 'Zebra',
-                        currentValue: 'Tomorrow',
-                        requires: 'useTheme'
-                    }
-                }
-            }
-        }
-    }
-});
-*/
+    UserscriptSettings.forObject = forObject;
+}
