@@ -1,6 +1,7 @@
 // TODO:  - Finish the import feature.
 //        - Implement the 'requires' feature.
-//        - Add types: date, range, textarea, radio
+//        - Add types: date, range, textarea, radio.
+//        - Add instructions for each function in README.
 
 
 if (typeof UserscriptSettings === 'undefined') {
@@ -57,8 +58,8 @@ if (typeof UserscriptSettings === 'undefined') {
         let obj = traverseObject(this.vars.settings, ...expandedPath);
         let out = {};
         forObject(obj, ([key, val], ...path) => {
-            if (val != null && val.currentValue != null)
-                setObjectValue(out, val.currentValue, ...path.filter(val => val !== 'settings'));
+            if (val != null)
+                setObjectValue(out, val.currentValue || val.defaultValue, ...path.filter(val => val !== 'settings'));
         });
         return out;
     };
