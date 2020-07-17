@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.1
+// @version      1.2
 // @description  Adds some extra features to YouTube
 // @author       DrDoof
 // @match        https://www.youtube.com/*
 // @icon         https://youtube.com/favicon.ico
+// @require      https://raw.githubusercontent.com/josefandersson/userscripts/master/userscript-settings/userscript-settings.js
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
@@ -15,18 +16,119 @@
 
 // FIXME: - Opening video in new tab will not autoplay the video, but it will
 //          still add the video to history if tab is opened for more than 10 seconds
-// TODO:  - Add a percentage indicator of video progress
-//        - Playlists: reverse, shuffle
+//        - Rename 'mModulePlaybackRate' to 'mPlaybackRate'
+// TODO:  - Playlists: reverse, shuffle
 //        - Disable autoplaying 'channel trailer' video on channel page
 //        - Minimize player when scrolling down
 
-const ENABLED_MODULES = ['mProgress', 'mModulePlaybackRate', 'mOpenThumbnail', 'mScreenShot', 'mGoToTimestamp', 'mModuleHistory'];
+const ENABLED_MODULES = ['mProgress', 'mPlaybackRate', 'mOpenThumbnail', 'mScreenshot', 'mGoToTimestamp', 'mHistory'];
 
 const MIN_PLAYBACK_RATE = .1;
 const MAX_PLAYBACK_RATE = 3;
 const PLAYBACK_STEP = .05;
 const MIN_TIME_WATCHED_BEFORE_SEEN = 7000; // n milliseconds or 80% of video length
 
+
+
+// =============
+// User settings
+// =============
+const currentValues = GM_getValue('settings', { keyPressRate:0, mProgressEnabled:true, mPlaybackRate:true, mOpenThumbnail:true, mScreenshot:true, mGoToTimestamp:true, mHistory:true });
+const settings = new UserscriptSettings({
+    youtubeSlightlyBetter: {
+        label: 'YouTube Slightly Better',
+        settings: {
+            keyPressRate: {
+                label: 'Key press rate (0 for system default)',
+                type: 'number',
+                defaultValue: 0,
+                currentValue: currentValues.keyPressRate
+            },
+            modules: {
+                label: 'Modules',
+                settings: {
+                    mProgress: {
+                        label: 'Progress',
+                        settings: {
+                            enabled: {
+                                label: 'Enabled',
+                                type: 'checkbox',
+                                defaultValue: true,
+                                currentValue: currentValues.mProgressEnabled
+                            }
+                        }
+                    },
+                    mPlaybackRate: {
+                        label: 'Playback Rate',
+                        settings: {
+                            enabled: {
+                                label: 'Enabled',
+                                type: 'checkbox',
+                                defaultValue: true,
+                                currentValue: currentValues.mPlaybackRate
+                            }
+                        }
+                    },
+                    mOpenThumbnail: {
+                        label: 'Open Thumbnail',
+                        settings: {
+                            enabled: {
+                                label: 'Enabled',
+                                type: 'checkbox',
+                                defaultValue: true,
+                                currentValue: currentValues.mOpenThumbnail
+                            }
+                        }
+                    },
+                    mScreenshot: {
+                        label: 'Screenshot',
+                        settings: {
+                            enabled: {
+                                label: 'Enabled',
+                                type: 'checkbox',
+                                defaultValue: true,
+                                currentValue: currentValues.mScreenshot
+                            }
+                        }
+                    },
+                    mGoToTimestamp: {
+                        label: 'Go To Timestamp',
+                        settings: {
+                            enabled: {
+                                label: 'Enabled',
+                                type: 'checkbox',
+                                defaultValue: true,
+                                currentValue: currentValues.mGoToTimestamp
+                            }
+                        }
+                    },
+                    mHistory: {
+                        label: 'History',
+                        settings: {
+                            enabled: {
+                                label: 'Enabled',
+                                type: 'checkbox',
+                                defaultValue: true,
+                                currentValue: currentValues.mHistory
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+});
+
+settings.addOnSave(() => {
+    const data = settings.getValues('youtubeSlightlyBetter');
+    console.log('Saved:', data);
+}, 'youtubeSlightlyBetter');
+
+
+
+// ===============
+// Event Listening
+// ===============
 let keyListeners = {};
 
 function keyEvent(ev, event) {
@@ -39,11 +141,21 @@ document.addEventListener('keypress', ev => keyEvent(ev, 'keypress'));
 document.addEventListener('keyup', ev => keyEvent(ev, 'keyup'));
 document.addEventListener('keydown', ev => keyEvent(ev, 'keydown'));
 
-GM_registerMenuCommand('YT Better Controls settings', () => console.log('Settings command was issued!'), 'y');
+GM_registerMenuCommand('Settings', settings.show, 's');
 
+
+
+// ================
+// Helper Functions
+// ================
 const cr = (type, obj) => Object.assign(document.createElement(type), obj || {});
 
+
+
 (() => {
+    // =======
+    // Modules
+    // =======
     class mModule {
         constructor() {
             this.element = cr('div');
@@ -81,7 +193,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     // - Current rate is shown between S and F. Click current rate to reset rate to 1.
     // - Use keybindings a, s, d for the three buttons respectively.
     //
-    mModule.mModulePlaybackRate = class mModulePlaybackRate extends mModule {
+    mModule.mPlaybackRate = class mPlaybackRate extends mModule {
         constructor() {
             super();
             this.slower = this.addItem(new mItemBtnHold(this, 'S'));
@@ -151,7 +263,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     // - Take screenshot and download it by clicking on H.
     // - Use keybinding h to take screenshot.
     //
-    mModule.mScreenShot = class mScreenShot extends mModule {
+    mModule.mScreenshot = class mScreenshot extends mModule {
         constructor() {
             super();
             this.screenshot = this.addItem(new mItemBtn(this, 'H'));
@@ -251,7 +363,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     //
     // - Remember all watched videos and print how many times current video has been watched.
     //
-    mModule.mModuleHistory = class mModuleHistory extends mModule {
+    mModule.mHistory = class mHistory extends mModule {
         constructor() {
             super();
             this.seen = this.addItem(new mItemBtn(this, '-'));
@@ -347,7 +459,9 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
 
 
 
-
+    // ==========
+    // Menu Items
+    // ==========
     class mItem {
         constructor(module) {
             this.module = module;
@@ -420,6 +534,11 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
         }
     }
 
+
+
+    // ==================
+    // Inject CSS styling
+    // ==================
     GM_addStyle(
 `.ytbc{float:right;color:white;}
 .ytbc>div{display:inline-block;margin:0 4px;}
@@ -430,6 +549,10 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     color:#350505;background-color:#d019108c;font-size:20px;padding:10px;border:none;text-align:center;}
 .ytbc-p>input:focus{outline:none;}`);
 
+
+    // ====
+    // Init
+    // ====
     let title, video, container;
     let modules = null;
 
@@ -441,6 +564,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
         title.parentElement.insertBefore(container, title);
     }
 
+    // Wait for video to exist before initializing modules
     // TODO: If current page isn't a watch page maybe we should wait some other way?
     let id = setInterval(() => {
         if (!title) title = document.querySelector('#container>.title');
