@@ -76,4 +76,4 @@ Example data object:
 
 ### IMPORTANT
 
-Don't use this library to set sensitive settings! Passwords, keys or other important/private data should be handled by your own script. All settings set with this library can be accessed by other loaded userscript, other browser extensions and the website it's used on!
+Don't use this library to set sensitive settings! Passwords, keys or other important/private data should be handled by your own script. All settings set with this library can be accessed by other loaded userscripts, other browser extensions and the website it's used on!
