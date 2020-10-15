@@ -222,7 +222,7 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
          * Key down event listener.
          * Called only from event handler.
          */
-        onKeyDown(ev) {
+        onKeyDown(ev) { // TODO: Some of the bindings should be onKeyPress instead of down
             if (ev.target.tagName !== 'INPUT') {
                 let toRun;
                 switch (ev.code) {
@@ -317,7 +317,7 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
     class FeedPage extends Page {
         // OVERRIDE
         downloadCurrent() {
-
+            // TODO: Redo download thingy from the ground, what I've started is just working in circles
         }
 
         // OVERRIDE
@@ -447,6 +447,10 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
             return document.querySelector('article[role=presentation]');
         }
 
+        getVideoSrc(element) {
+
+        }
+
         // OVERRIDE
         isElementWithinView(element) {
             const elOffset = this.getElementOffset(element);
@@ -495,6 +499,43 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
                 this.setCurrentAndScroll(next);
         }
 
+        // OVERRIDE
+        likePost() {
+            this.getPopupPost()?.querySelector('div:last-child > section > span > button')?.click()
+        }
+
+        // OVERRIDE
+        savePost() {
+            this.getPopupPost()?.querySelector('div > section > span:last-child button')?.click();
+        }
+
+        // OVERRIDE
+        setCurrentAndScroll(element) {
+            this.currentPost = element;
+            console.log(this.currentPost);
+            if (element && !this.isElementWithinView(this.currentPost))
+                scrollTo(0, this.getElementOffset(this.currentPost) - 60);
+            this.updateCurrentPostMarking();
+        }
+
+        // OVERRIDE
+        toggleFullImage() {
+            if (this.currentFullPost) {
+                Object.assign(this.currentFullPost.style, { position:'', zIndex:'', width:'', height:'' });
+                this.currentFullPost.parentElement.style.overflow = 'hidden';
+                this.currentFullPost = null;
+            } else {
+                let popup = this.getPopupPost();
+                if (!popup)
+                    return;
+                const img = popup.querySelector('div:nth-child(3) img');
+                this.makeMaxQuality(img);
+                Object.assign(img.style, { position:'absolute', zIndex:'10', width:'1080px', height:'auto' });
+                img.parentElement.style.overflow = 'unset';
+                this.currentFullPost = img;
+            }
+        }
+
         /**
          * Updates the marking around the current post.
          */
@@ -509,15 +550,6 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
                 next.classList.add('current-post');
                 next.style.border = '2px solid red';
             }
-        }
-
-        // OVERRIDE
-        setCurrentAndScroll(element) {
-            this.currentPost = element;
-            console.log(this.currentPost);
-            if (element && !this.isElementWithinView(this.currentPost))
-                scrollTo(0, this.getElementOffset(this.currentPost) - 60);
-            this.updateCurrentPostMarking();
         }
 
         // OVERRIDE
