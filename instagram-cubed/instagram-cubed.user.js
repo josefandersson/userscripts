@@ -1,11 +1,12 @@
 // ==UserScript==
-// @name         I²nstagram
-// @namespace    https://github.com/josefandersson/Userscripts/instagram-better-player
+// @name         Instagram²
+// @namespace    https://github.com/josefandersson/Userscripts/instagram-cubed
 // @version      1.2
-// @description  Instagram Improved | Adds some QoL features to Instagram.
-//               - Deobfuscates videos and images making  themeasily saveable by right-click and 'save-as'.
+// @description  Adds some QoL features to Instagram.
+//               - Deobfuscates videos and images making them easier to save.
+//               - Maximizes image quality.
 //               - Makes the site navigateable with the keyboard.
-// @author       DrDoof
+// @author       Josef Andersson
 // @match        https://www.instagram.com/*
 // @match        https://instagram.com/*
 // @icon         https://instagram.com/favicon.ico
