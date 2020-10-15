@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Instagram²
-// @namespace    https://github.com/josefandersson/Userscripts/instagram-cubed
+// @namespace    https://github.com/josefandersson/userscripts/tree/master/instagram-cubed
 // @version      1.2
 // @description  Adds some QoL features to Instagram.
 //               - Deobfuscates videos and images making them easier to save.
