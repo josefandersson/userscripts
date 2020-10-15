@@ -32,8 +32,7 @@ Keybindings:
     Post page (or opened popup on explore and profile page): /p/<post-id>/
         >Same as on Feed page.
     General:
-        Ctrl-left-click - open image/video in maximum quality in new tab
-        Shift-left-click - save image/video in maximum quality
+        Shift-left-click - open image/video in maximum quality in new tab
 */
 
 const MUTE_VOLUME_TRESHOLD = .005; // Minimum scrolled volume change before muting video
@@ -219,6 +218,20 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
         likePost() { throw new Error('not implemented'); }
         
         /**
+         * Mouse click event listener.
+         * Called only from event handler.
+         */
+        onClick(ev) {
+            if (ev.shiftKey) {
+                if (ev.target.tagName === 'IMG' || ev.target.tagName === 'VIDEO') {
+                    let src = this.getImageSrc(ev.target);
+                    if (src)
+                        open(src, '_blank');
+                }
+            }
+        }
+
+        /**
          * Key down event listener.
          * Called only from event handler.
          */
@@ -296,7 +309,7 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
          * @returns {Page} Page
          */
         static getPage() {
-            return [FeedPage, ExplorePage, StoriesPage, DMPage, ProfilePage].find(page => page.isCurrentPage());
+            return [FeedPage, ExplorePage, StoriesPage, DMPage, ProfilePage, UnknownPage].find(page => page.isCurrentPage());
         }
 
         /**
@@ -572,7 +585,6 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
      * A profile page: /<username>/.
      */
     class ProfilePage extends PopupPage {
-
         // OVERRIDE
         static isCurrentPage() {
             return location.pathname !== '/explore/' && /^\/[^\/]+\/$/.test(location.pathname);
@@ -583,7 +595,7 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
      * DM/inbox page: /direct/inbox/.
      */
     class DMPage extends Page {
-        
+        // OVERRIDE
         static isCurrentPage() {
             return location.pathname === '/direct/inbox/';
         }
@@ -593,8 +605,19 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
      * Stories page: /stories/<username>/<story_id>/.
      */
     class StoriesPage extends Page {
+        // OVERRIDE
         static isCurrentPage() {
             return location.pathname.startsWith('/stories/');
+        }
+    }
+
+    /**
+     * When page is not known or matches any other page
+     */
+    class UnknownPage extends Page {
+        // OVERRIDE
+        static isCurrentPage() {
+            return true;
         }
     }
 
@@ -603,7 +626,8 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
     let page = new newPage();
     page.init();
 
-    document.addEventListener('keydown', ev => page.onKeyDown(ev));
+    document.addEventListener('keydown', ev => page?.onKeyDown(ev));
+    document.addEventListener('click', ev => page?.onClick(ev))
 
     let volume = GM_getValue('volume');
     let volumeChangeId;
