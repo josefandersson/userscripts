@@ -15,15 +15,25 @@
 // ==/UserScript==
 
 /*
-Left, right, up, down - Navigate to the next post in direction, when popup post left and right will move to
-                        next image in post while up and down will navigate to previous and next posts.
-0 or s - Save post
-1 or l - Like post
-2 or f - Full size image
-, or . - Move video frame by frame in either direction
-Space - pause/play video
-Ctrl-left-click - open image/video in maximum quality in new tab
-Shift-left-click - save image/video in maximum quality
+Keybindings:
+    Feed page: /
+        Up, down - Navigate to previous or next post.
+        Left, right - Go to previous or next image/video in current post
+        S or numpad0 - Save current post
+        L or numpad1 - Like current post
+        F or numpad2 - Make current image full size (and use maximum available resolution)
+        Space or right ctrl - Pause/play current video
+        Ctrl + left, right - Skip 1 second backwards or forwards in current video
+        Comma, period - Skip 1 frame backwards or forwards in current video
+        G or right shift - Go to current post's uploader's profile
+    Explore page and profile page: /explore/, /<username>/
+        Up, down, left, right - Navigate to post in direction
+        Right ctrl - Open currently marked post
+    Post page (or opened popup on explore and profile page): /p/<post-id>/
+        >Same as on Feed page.
+    General:
+        Ctrl-left-click - open image/video in maximum quality in new tab
+        Shift-left-click - save image/video in maximum quality
 */
 
 const MUTE_VOLUME_TRESHOLD = .005; // Minimum scrolled volume change before muting video
