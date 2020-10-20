@@ -32,7 +32,7 @@ Keybindings:
     Post page (or opened popup on explore and profile page): /p/<post-id>/
         >Same as on Feed page.
     General:
-        Shift-left-click - open image/video in maximum quality in new tab
+        Shift-left-click - open image or video poster in maximum quality in new tab
 */
 
 const MUTE_VOLUME_TRESHOLD = .005; // Minimum scrolled volume change before muting video
