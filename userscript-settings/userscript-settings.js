@@ -155,7 +155,7 @@ if (typeof UserscriptSettings === 'undefined') {
         
         const container = construct(this.vars.settings);
         const btns = cr('div');
-        [['Import', ()=>this.importPrompt()], ['Export', ()=>this.export()], ['Reset', ()=>this.reset()], ['Save', ()=>this.save()], ['Close', ()=>this.close()]].forEach(([text, cb]) => {
+        [['Import', ()=>this.importPrompt()], ['Export', ()=>this.export()], ['Reset', ()=>this.reset()], ['Save', ()=>this.save()], ['Close', ()=>this.hide()]].forEach(([text, cb]) => {
             const btn = cr('button', { innerText:text });
             btn.addEventListener('click', cb);
             btns.appendChild(btn);
