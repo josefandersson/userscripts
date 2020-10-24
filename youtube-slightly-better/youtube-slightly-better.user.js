@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.2
+// @version      1.21
 // @description  Adds some extra features to YouTube
 // @author       DrDoof
 // @match        https://www.youtube.com/*
@@ -16,7 +16,6 @@
 
 // FIXME: - Opening video in new tab will not autoplay the video, but it will
 //          still add the video to history if tab is opened for more than 10 seconds
-//        - Rename 'mModulePlaybackRate' to 'mPlaybackRate'
 // TODO:  - Playlists: reverse, shuffle
 //        - Disable autoplaying 'channel trailer' video on channel page
 //        - Minimize player when scrolling down
@@ -33,7 +32,7 @@ const MIN_TIME_WATCHED_BEFORE_SEEN = 7000; // n milliseconds or 80% of video len
 // =============
 // User settings
 // =============
-const currentValues = GM_getValue('settings', { keyPressRate:0, mProgressEnabled:true, mPlaybackRate:true, mOpenThumbnail:true, mScreenshot:true, mGoToTimestamp:true, mHistory:true });
+const currentValues = GM_getValue('settings', { keyPressRate:0, playbackRateStep:.05, mProgressEnabled:true, mPlaybackRate:true, mOpenThumbnail:true, mScreenshot:true, mGoToTimestamp:true, mHistory:true });
 const settings = new UserscriptSettings({
     youtubeSlightlyBetter: {
         label: 'YouTube Slightly Better',
@@ -43,6 +42,12 @@ const settings = new UserscriptSettings({
                 type: 'number',
                 defaultValue: 0,
                 currentValue: currentValues.keyPressRate
+            },
+            playbackRateStep: {
+                label: 'Playback rate step',
+                type: 'number',
+                defaultValue: 0.05,
+                currentValue: currentValues.playbackRateStep
             },
             modules: {
                 label: 'Modules',
@@ -199,7 +204,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             this.slower = this.addItem(new mItemBtnHold(this, 'S'));
             this.speed = this.addItem(new mItemBtn(this, this.getPlaybackRateStr()));
             this.faster = this.addItem(new mItemBtnHold(this, 'F'));
-            this.slower.addOnClick(() => this.changePlaybackRate(-PLAYBACK_STEP));
+            this.slower.addOnClick(() => this.changePlaybackRate(-currentValues.keyPressRate));
             this.speed.addOnClick(() => {
                 if (!this.setPlaybackRate(1))
                     this.clearDown();
