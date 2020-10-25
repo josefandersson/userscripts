@@ -250,8 +250,8 @@ const CLICK_RATE = 100;
             document.addEventListener('keydown', ev => Binds.onKeyPress(ev));
         },
         onKeyPress: ev => {
-            const bind = KEYBINDINGS.find(bind => ev.code === bind[0]);
-            if (bind) bind[1]();
+            const bind = KEYBINDINGS.find(bind => ev.code === bind[0] && ev.ctrlKey == bind[1] && ev.shiftKey == bind[2]);
+            if (bind) bind[3]();
         },
         doClose: () => {
             close();
@@ -274,17 +274,18 @@ const CLICK_RATE = 100;
     };
     if (ENABLE_KEYBINDS) Binds.init();
 
+    // code, ctrlMask, shiftMask, function
     const KEYBINDINGS = [
-        ['KeyS', Binds.doSave],
-        ['Numpad0', Binds.doSave],
-        ['KeyQ', Binds.doClose],
-        ['ControlRight', Binds.doClose],
-        ['KeyF', Binds.doFullscreen],
-        ['ShiftRight', Binds.doFullscreen],
-        ['KeyE', Binds.doRotateLeft],
-        ['Numpad1', Binds.doRotateLeft],
-        ['KeyR', Binds.doRotateRight],
-        ['Numpad2', Binds.doRotateRight],
+        ['KeyS',         0, 0, Binds.doSave],
+        ['Numpad0',      0, 0, Binds.doSave],
+        ['KeyQ',         0, 0, Binds.doClose],
+        ['ControlRight', 1, 0, Binds.doClose],
+        ['KeyF',         0, 0, Binds.doFullscreen],
+        ['ShiftRight',   0, 1, Binds.doFullscreen],
+        ['KeyR',         0, 1, Binds.doRotateLeft],
+        ['Numpad1',      0, 0, Binds.doRotateLeft],
+        ['KeyR',         0, 0, Binds.doRotateRight],
+        ['Numpad2',      0, 0, Binds.doRotateRight],
         // TODO: Add keysbindings for zooming in and out and paning with arrows?
     ];
 })();
