@@ -1,16 +1,20 @@
 // ==UserScript==
 // @name         Better Image Viewer
-// @namespace    -
-// @version      1.1
+// @namespace    https://github.com/josefandersson/userscripts/tree/master/better-image-viewer
+// @version      1.2
 // @description  Make the raw image viewer great again!
 //               Adds filters (contrast, brightness, saturation and invert)
 //               Adds a decent zooming feature with ctrl+zoom
 //               Adds keybindings for doing things easier with one hand ;)
 // @author       Josef Andersson
 // @include      *.jpg
+// @include      *.jpg?*
 // @include      *.jpeg
+// @include      *.jpeg?*
 // @include      *.png
+// @include      *.png?*
 // @include      *.gif
+// @include      *.gif?*
 // ==/UserScript==
 
 // ONE CAN CHANGE KEYBINDINGS AT THE BOTTOM OF THE SCRIPT
@@ -25,6 +29,8 @@ const CLICK_RATE = 100;
 
 (function() {
     'use strict';
+
+    // TODO: Check if page really is an image page
 
     // ================
     // HELPER FUNCTIONS
@@ -221,7 +227,7 @@ const CLICK_RATE = 100;
             console.log(diffW, diffH, rx, ry);
 
             let ox = 0, oy = 0;
-            if (within(rx, ry, .15, .15, .85, .85)) {
+            if (within(rx, ry, .1, .1, .9, .9)) {
                 ox = rx;
                 oy = ry;
             } else {
