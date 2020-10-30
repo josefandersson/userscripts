@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.3
+// @version      1.31
 // @description  Adds some extra features to YouTube
 // @author       DrDoof
 // @match        https://www.youtube.com/*
@@ -20,8 +20,6 @@
 //        - (opt-in to) Remember video titles and uploader so that we can fill the void when videos are removed
 //        - Disable autoplaying 'channel trailer' video on channel page
 //        - Minimize player when scrolling down
-//        - Autotrim video- ie ability to set a custom start and end point where video will skip
-//          to and past when in playlists to skip intros/outros for music videos etc.
 
 const ENABLED_MODULES = ['mProgress', 'mPlaybackRate', 'mOpenThumbnail', 'mScreenshot', 'mGoToTimestamp', 'mHistory', 'mTrim'];
 
@@ -494,41 +492,47 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             this.onChange();
         }
         drawTrims() {
-            [...this.trimBar.children].forEach(c => c.remove());
-            const drawTrim = (start, end, i) => {
-                const trim = document.createElement('div');
-                trim.style.height = '100%';
-                trim.style.position = 'absolute';
-                trim.style.left = start / video.duration * 100 + '%';
-                trim.style.width = (end - start) / video.duration * 100 + '%';
-                trim.style.backgroundColor = '#dd2fe0';
-                let prevClick = 0;
-                let id;
-                trim.onclick = () => {
-                    clearTimeout(id);
-                    if (Date.now() < prevClick + 200) {
-                        this.trims.splice(i, 1);
-                        this.drawTrims();
-                    } else {
-                        prevClick = Date.now();
-                        id = setTimeout(() => {
-                            video.currentTime = start;
-                        }, 200);
-                    }
+            if (!this.trims.length && !this.current) {
+                this.trimBar.style.display = 'none';
+            } else {
+                this.trimBar.style.display = 'block';
+                [...this.trimBar.children].forEach(c => c.remove());
+                const drawTrim = (start, end, i) => {
+                    const trim = document.createElement('div');
+                    trim.style.height = '150%';
+                    trim.style.position = 'absolute';
+                    trim.style.left = start / video.duration * 100 + '%';
+                    trim.style.width = (end - start) / video.duration * 100 + '%';
+                    trim.style.backgroundColor = '#dd2fe0';
+                    let prevClick = 0;
+                    let id;
+                    trim.onclick = () => {
+                        clearTimeout(id);
+                        if (Date.now() < prevClick + 200) {
+                            this.trims.splice(i, 1);
+                            this.drawTrims();
+                            this.saveTrims();
+                        } else {
+                            prevClick = Date.now();
+                            id = setTimeout(() => {
+                                video.currentTime = start;
+                            }, 200);
+                        }
+                    };
+                    this.trimBar.appendChild(trim);
                 };
-                this.trimBar.appendChild(trim);
-            };
-            this.trim.element.innerText = `T${this.trims.length || ''}`;
-            this.trims.forEach((pair, i) => drawTrim(...pair, i));
-            if (this.current) {
-                const curr = document.createElement('div');
-                curr.style.height = '150%';
-                curr.style.position = 'absolute';
-                curr.style.left = this.current / video.duration * 100 + '%';
-                curr.style.width = '3px';
-                curr.style.backgroundColor = '#40fdd1';
-                this.trimBar.appendChild(curr);
+                this.trims.forEach((pair, i) => drawTrim(...pair, i));
+                if (this.current) {
+                    const curr = document.createElement('div');
+                    curr.style.height = '200%';
+                    curr.style.position = 'absolute';
+                    curr.style.left = this.current / video.duration * 100 + '%';
+                    curr.style.width = '2px';
+                    curr.style.backgroundColor = '#40fdd1';
+                    this.trimBar.appendChild(curr);
+                }
             }
+            this.trim.element.innerText = `T${this.trims.length || ''}`;
         }
         handleOnClick() {
             const currentTime = video.currentTime;
@@ -570,10 +574,11 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             if (!this.trimBar) {
                 const buttons = document.querySelector('.ytp-chrome-controls');
                 this.trimBar = document.createElement('div');
-                this.trimBar.style.height = '3px';
-                this.trimBar.style.transform = 'translateY(4px)';
+                this.trimBar.style.height = '2px';
+                this.trimBar.style.transform = 'translateY(-38px)';
                 this.trimBar.style.backgroundColor = '#bf79ff40';
-                buttons.parentElement.insertBefore(this.trimBar, buttons);
+                this.trimBar.style.display = 'none';
+                buttons.parentElement.appendChild(this.trimBar);
             }
             this.current = null;
             this.trim.element.style.color = '';
@@ -583,6 +588,10 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             }
             this.calculateNextSkip();
             this.drawTrims();
+        }
+        onKey(ev) {
+            super.onKey(ev);
+            this.handleOnClick();
         }
         onTimeUpdate() {
             if (this.nextSkip) {
