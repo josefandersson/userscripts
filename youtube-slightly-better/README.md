@@ -12,6 +12,7 @@ A bitter attempt at making the YouTube experience better. This script adds a few
 | Open Thumbnail | Open video thumbnail in new tab. | b | yes |
 | History | Remember all watched videos and print how many times current video has been watched. | | yes |
 | Progress | Show a progress percentage below the video. | - | yes |
+| Trim | Set trims for when video is autoplayed (eg. good for music videos in playlists). Video parts not within trims will be skipped. | y | yes |
 
 ## Installation
 
