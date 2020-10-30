@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.21
+// @version      1.22
 // @description  Adds some extra features to YouTube
 // @author       DrDoof
 // @match        https://www.youtube.com/*
@@ -323,13 +323,21 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             }
         }
         goToTimestamp(str) {
-            console.log('Attempting to hop to', str);
+            let [s, m, h] = str.split(':').reverse();
+            s = +s.replace(/^0*/, '');
+            if (m) s += (+m.replace(/^0*/, ''))*60;
+            if (h) s += (+h.replace(/^0*/, ''))*3600;
+            console.log('Attempting to hop to %ss', s);
+            if (s < video.duration)
+                video.currentTime = s;
+            else
+                console.log('Video is not long enough!');
         }
         openPrompt() {
             if (this.prompt) return this.closePrompt();
             this.prompt = cr('div', { className:'ytbc-p' });
             const input = cr('input', { type:'text', autofill:'off', size:1 });
-            const allowedTimestamp = /^([0-5]{0,1}[0-9]{1}(:[0-5]{0,1}[0-9]{1}){0,2})$/;
+            const allowedTimestamp = /^[0-5]{0,1}[0-9]{1}(:[0-5]{0,1}[0-9]{1}){0,2}$/;
             const badCharacters = /[^0-9:]/g;
             input.addEventListener('input', ev => {
                 if (ev.data && badCharacters.test(ev.data))
@@ -350,7 +358,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
                     this.closePrompt();
                 }
             });
-            input.addEventListener('focusout', () => this.closePrompt());
+            input.addEventListener('focusout', () => setTimeout(() => this.closePrompt(), 50));
             this.prompt.appendChild(input);
             document.body.appendChild(this.prompt);
             input.select();
@@ -359,7 +367,6 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             if (this.prompt) {
                 this.prompt.remove();
                 this.prompt = null;
-                this.handleOnClick();
             }
         }
     }
