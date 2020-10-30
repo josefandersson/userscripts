@@ -17,10 +17,13 @@
 // FIXME: - Opening video in new tab will not autoplay the video, but it will
 //          still add the video to history if tab is opened for more than 10 seconds
 // TODO:  - Playlists: reverse, shuffle
+//        - (opt-in to) Remember video titles and uploader so that we can fill the void when videos are removed
 //        - Disable autoplaying 'channel trailer' video on channel page
 //        - Minimize player when scrolling down
+//        - Autotrim video- ie ability to set a custom start and end point where video will skip
+//          to and past when in playlists to skip intros/outros for music videos etc.
 
-const ENABLED_MODULES = ['mProgress', 'mPlaybackRate', 'mOpenThumbnail', 'mScreenshot', 'mGoToTimestamp', 'mHistory'];
+const ENABLED_MODULES = ['mProgress', 'mPlaybackRate', 'mOpenThumbnail', 'mScreenshot', 'mGoToTimestamp', 'mHistory', 'mTrim'];
 
 const MIN_PLAYBACK_RATE = .1;
 const MAX_PLAYBACK_RATE = 3;
@@ -459,6 +462,97 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
                 this.percent = newPercentage;
                 this.progress.element.innerText = `${this.percent}%`;
             }
+        }
+    }
+
+    const TRIM_PROXIMITY = .99;
+
+    // ===========
+    // Trim Module
+    // ===========
+    //
+    // - Autotrim videos for the next time you watch them. Useful for eg. music videos on music playlists.
+    // - Set a trim start and stop with hotkey 'y', when video loads it will jump to first trim start
+    // - With multiple trims, it will skip video between trims
+    // - One trim fully within another trim will untrim (skip) that part of the parent trim
+    // - When trims overlap but aren't fully within, the trims will add together
+    //
+    mModule.mTrim = class mTrim extends mModule {
+        constructor() {
+            super();
+            this.trim = this.addItem(new mItemBtn(this, 'T'));
+            this.trim.addOnClick(() => this.handleOnClick());
+            this.registerKeys(['y']);
+            video.addEventListener('loadeddata', ev => this.onChange(ev));
+            this.trims = []; // Contains arrays with [startTimestamp, endTimestamp] (seconds)
+            this.current = null;
+        }
+        drawTrims() {
+            this.trimBar.children.forEach(c => c.remove());
+            const drawTrim = (start, end) => {
+                // const trim
+            };
+        }
+        handleOnClick() {
+            const currentTime = video.currentTime;
+            const inProx = this.trims.find(trim => this.inProximity(currentTime, trim[0], TRIM_PROXIMITY) ||
+                this.inProximity(currentTime, trim[1], TRIM_PROXIMITY));
+            if (inProx && !this.current) {
+                this.trims.splice(this.trims.indexOf(inProx), 1);
+                // if (this.inProximity(currentTime, inProx[0], TRIM_PROXIMITY)) {
+                //     if (this.current) {
+                //         if (this.current < inProx[1]) {
+                //             inProx[0] = this.current;
+                //             this.trims.push(inProx);
+                //             this.saveTrims();
+                //         }
+                //     } else {
+                //         this.current = inProx[1];
+                //     }
+                // } else {
+                //     if (this.current) {
+                //         if (inProx[0] < this.current) {
+                //             inProx[1] = this.current;
+                //             this.trims.push(inProx);
+                //             this.saveTrims();
+                //         }
+                //     } else {
+                //         this.current = inProx[0];
+                //     }
+                // }
+            } else {
+                if (this.current) {
+                    if (this.current < currentTime)
+                        this.trims.push([this.current, currentTime]);
+                    else
+                        this.trims.push([currentTime, this.current]);
+                    this.current = null;
+                    this.saveTrims();
+                }
+                this.current = currentTime;
+            }
+            // TODO: Update display things
+            console.log('Current:', this.current, '- Trims:', this.trims);
+        }
+        inProximity(val1, val2, prox) {
+            return Math.abs(val1 - val2) < prox;
+        }
+        onChange() {
+            this.videoId = new URLSearchParams(location.search).get('v');
+            if (this.videoId)
+                this.trims = GM_getValue(`t-${this.videoId}`, []);
+            else
+                this.trims = [];
+            const buttons = document.querySelector('.ytp-chrome-controls');
+            this.trimBar = document.createElement('div');
+            this.trimBar.style.height = '3px';
+            buttons.parentElement.insertBefore(this.trimBar, buttons);
+        }
+        saveTrims() {
+            if (!this.videoId)
+                this.videoId = new URLSearchParams(location.search).get('v');
+            if (this.videoId)
+                GM_setValue(`t-${this.videoId}`, this.trims);
         }
     }
 
