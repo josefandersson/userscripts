@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.22
+// @version      1.3
 // @description  Adds some extra features to YouTube
 // @author       DrDoof
 // @match        https://www.youtube.com/*
@@ -327,11 +327,8 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             s = +s.replace(/^0*/, '');
             if (m) s += (+m.replace(/^0*/, ''))*60;
             if (h) s += (+h.replace(/^0*/, ''))*3600;
-            console.log('Attempting to hop to %ss', s);
             if (s < video.duration)
                 video.currentTime = s;
-            else
-                console.log('Video is not long enough!');
         }
         openPrompt() {
             if (this.prompt) return this.closePrompt();
@@ -491,71 +488,122 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             this.trim.addOnClick(() => this.handleOnClick());
             this.registerKeys(['y']);
             video.addEventListener('loadeddata', ev => this.onChange(ev));
+            video.addEventListener('timeupdate', ev => this.onTimeUpdate(ev));
             this.trims = []; // Contains arrays with [startTimestamp, endTimestamp] (seconds)
             this.current = null;
+            this.onChange();
         }
         drawTrims() {
-            this.trimBar.children.forEach(c => c.remove());
-            const drawTrim = (start, end) => {
-                // const trim
+            [...this.trimBar.children].forEach(c => c.remove());
+            const drawTrim = (start, end, i) => {
+                const trim = document.createElement('div');
+                trim.style.height = '100%';
+                trim.style.position = 'absolute';
+                trim.style.left = start / video.duration * 100 + '%';
+                trim.style.width = (end - start) / video.duration * 100 + '%';
+                trim.style.backgroundColor = '#dd2fe0';
+                let prevClick = 0;
+                let id;
+                trim.onclick = () => {
+                    clearTimeout(id);
+                    if (Date.now() < prevClick + 200) {
+                        this.trims.splice(i, 1);
+                        this.drawTrims();
+                    } else {
+                        prevClick = Date.now();
+                        id = setTimeout(() => {
+                            video.currentTime = start;
+                        }, 200);
+                    }
+                };
+                this.trimBar.appendChild(trim);
             };
+            this.trim.element.innerText = `T${this.trims.length || ''}`;
+            this.trims.forEach((pair, i) => drawTrim(...pair, i));
+            if (this.current) {
+                const curr = document.createElement('div');
+                curr.style.height = '150%';
+                curr.style.position = 'absolute';
+                curr.style.left = this.current / video.duration * 100 + '%';
+                curr.style.width = '3px';
+                curr.style.backgroundColor = '#40fdd1';
+                this.trimBar.appendChild(curr);
+            }
         }
         handleOnClick() {
             const currentTime = video.currentTime;
-            const inProx = this.trims.find(trim => this.inProximity(currentTime, trim[0], TRIM_PROXIMITY) ||
-                this.inProximity(currentTime, trim[1], TRIM_PROXIMITY));
-            if (inProx && !this.current) {
-                this.trims.splice(this.trims.indexOf(inProx), 1);
-                // if (this.inProximity(currentTime, inProx[0], TRIM_PROXIMITY)) {
-                //     if (this.current) {
-                //         if (this.current < inProx[1]) {
-                //             inProx[0] = this.current;
-                //             this.trims.push(inProx);
-                //             this.saveTrims();
-                //         }
-                //     } else {
-                //         this.current = inProx[1];
-                //     }
-                // } else {
-                //     if (this.current) {
-                //         if (inProx[0] < this.current) {
-                //             inProx[1] = this.current;
-                //             this.trims.push(inProx);
-                //             this.saveTrims();
-                //         }
-                //     } else {
-                //         this.current = inProx[0];
-                //     }
-                // }
+            if (this.inProximity(currentTime, this.current, TRIM_PROXIMITY)) {
+                this.current = null;
+                this.trim.element.style.color = '';
             } else {
-                if (this.current) {
-                    if (this.current < currentTime)
-                        this.trims.push([this.current, currentTime]);
-                    else
-                        this.trims.push([currentTime, this.current]);
-                    this.current = null;
-                    this.saveTrims();
+                const inProx = this.trims.find(trim => this.inProximity(currentTime, trim[0], TRIM_PROXIMITY) ||
+                    this.inProximity(currentTime, trim[1], TRIM_PROXIMITY));
+                if (inProx && !this.current) {
+                    this.trims.splice(this.trims.indexOf(inProx), 1);
+                } else {
+                    if (this.current) {
+                        if (this.current < currentTime)
+                            this.trims.push([this.current, currentTime]);
+                        else
+                            this.trims.push([currentTime, this.current]);
+                        this.current = null;
+                        this.saveTrims();
+                        this.trim.element.style.color = '';
+                    } else {
+                        this.current = currentTime;
+                        this.trim.element.style.color = '#40fdd1';// '#fd62ea';
+                    }
                 }
-                this.current = currentTime;
             }
-            // TODO: Update display things
-            console.log('Current:', this.current, '- Trims:', this.trims);
+            this.drawTrims();
         }
         inProximity(val1, val2, prox) {
             return Math.abs(val1 - val2) < prox;
         }
         onChange() {
-            this.videoId = new URLSearchParams(location.search).get('v');
+            const params = new URLSearchParams(location.search);
+            this.videoId = params.get('v');
             if (this.videoId)
                 this.trims = GM_getValue(`t-${this.videoId}`, []);
             else
                 this.trims = [];
-            const buttons = document.querySelector('.ytp-chrome-controls');
-            this.trimBar = document.createElement('div');
-            this.trimBar.style.height = '3px';
-            buttons.parentElement.insertBefore(this.trimBar, buttons);
+            if (!this.trimBar) {
+                const buttons = document.querySelector('.ytp-chrome-controls');
+                this.trimBar = document.createElement('div');
+                this.trimBar.style.height = '3px';
+                this.trimBar.style.transform = 'translateY(4px)';
+                this.trimBar.style.backgroundColor = '#bf79ff40';
+                buttons.parentElement.insertBefore(this.trimBar, buttons);
+            }
+            this.current = null;
+            this.trim.element.style.color = '';
+            if (this.trims.length && !params.get('t')) {
+                this.trims.sort((a, b) => a[0] - b[0]);
+                video.currentTime = this.trims[0][0];
+            }
+            this.calculateNextSkip();
+            this.drawTrims();
+        }
+        onTimeUpdate() {
+            if (this.nextSkip) {
+                if (this.nextSkip <= video.currentTime) {
+                    this.calculateNextSkip();
+                    if (this.nextSkip) {
+                        this.trims.sort((a, b) => a[0] - b[0]);
+                        video.currentTime = this.trims.find(trim => video.currentTime < trim[0])[0];
+                    } else {
+                        video.currentTime = video.duration;
+                    }
+                }
+            }
+        }
+        calculateNextSkip() {
+            this.trims.sort((a, b) => a[1] - b[1]);
+            const next = this.trims.find(trim => video.currentTime < trim[1]);
+            this.nextSkip = next ? next[1] : null;
         }
         saveTrims() {
+            this.calculateNextSkip();
             if (!this.videoId)
                 this.videoId = new URLSearchParams(location.search).get('v');
             if (this.videoId)
