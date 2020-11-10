@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better Image Viewer
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/better-image-viewer
-// @version      1.2
+// @version      1.3
 // @description  Make the raw image viewer great again!
 //               Adds filters (contrast, brightness, saturation and invert)
 //               Adds a decent zooming feature with ctrl+zoom
@@ -56,6 +56,7 @@ const CLICK_RATE = 100;
     };
     image.src = oldImage.src;
 
+    let rotation = 0;
 
 
     // =======
@@ -64,9 +65,10 @@ const CLICK_RATE = 100;
     const Filters = {
         init: () => {
             // Effects as object { name:effect name, val:current value, def:default value, max:max value }
-            Filters.effects = [['brightness',100,1000], ['contrast',100,1000], ['saturate',100,1000], ['invert',0,100]].map(e => {
-                return { name:e[0], val:e[1], def:e[1], max:e[2] };
-            });
+            Filters.effects = [
+                ['brightness',100,1000], ['contrast',100,1000], ['saturate',100,1000],
+                ['invert',0,100]
+            ].map(e => { return { name:e[0], val:e[1], def:e[1], max:e[2] }; });
 
             Filters.createFilterPanel();            
             Filters.updateImageFilter();
@@ -269,7 +271,7 @@ const CLICK_RATE = 100;
                 document.body.requestFullscreen();
         },
         doRotateRight: (dir=1) => {
-            // TODO: Implement
+            image.style.transform = `rotate(${rotation += dir*90}deg)`;
         },
         doRotateLeft: () => {
             Binds.doRotateRight(-1);
