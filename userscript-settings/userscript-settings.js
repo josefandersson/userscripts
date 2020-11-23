@@ -7,14 +7,30 @@
 if (typeof UserscriptSettings === 'undefined') {
     const cr = (tagName, obj) => Object.assign(document.createElement(tagName), obj || {});
 
+    /**
+     * Return the item at path in Object obj.
+     * Equivalent of doing obj[path1][path2][path3]...
+     * @param {Object} obj 
+     * @param  {...String} path 
+     */
     const traverseObject = (obj, ...path) => {
+        if (!obj) return null;
         for (let key of path)
             if (obj[key]) obj = obj[key];
             else return null;
         return obj;
     };
 
+    /**
+     * Run Function cb for every item in Object obj on path.
+     * Same as doing cb(obj[path1]), cb(obj[path1][path2]), cb(obj[path1][path2][path3]), ...
+     * @param {Object} obj 
+     * @param {Function} cb 
+     * @param  {...String} path 
+     */
     const forObject = (obj, cb, ...path) => {
+        if (!obj || !cb) return;
+        console.log(obj);
         Object.entries(obj).forEach(([key, val]) => {
             cb([key, val], ...path, key);
             if (typeof val === 'object')
@@ -22,8 +38,17 @@ if (typeof UserscriptSettings === 'undefined') {
         });
     };
 
+    /**
+     * Set value of item at path in Object obj.
+     * Equivalent of doing obj[path1][path2][path3]...=value.
+     * @param {Object} obj 
+     * @param {any} value 
+     * @param  {...String} path 
+     */
     const setObjectValue = (obj, value, ...path) => {
+        if (!obj) return false;
         const final = path.pop();
+        console.log('obj:', obj, 'final:', final);
         if (!final) return false;
         for (let key of path) {
             if (!obj[key]) obj[key] = {};
@@ -40,6 +65,7 @@ if (typeof UserscriptSettings === 'undefined') {
 
         Object.assign(this.constructor.vars.settings, settings);
 
+        this.hide = () => this.constructor.hide();
         this.show = () => this.constructor.show();
         this.getValues = (...path) => this.constructor.getValues(...path);
         this.addOnSave = (cb, ...path) => this.constructor.addOnSave(cb, ...path);
@@ -86,7 +112,7 @@ if (typeof UserscriptSettings === 'undefined') {
             const json = JSON.parse(jsonStr);
             this.import(json);
         } catch (e) {
-            console.log('Invalid JSON');
+            console.warn('Invalid JSON');
             alert('Invalid JSON');
         }
     };

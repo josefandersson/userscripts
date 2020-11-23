@@ -1,0 +1,42 @@
+{
+    "label": "My Userscript",
+    "settings": {
+        "refresh": {
+            "label": "Autorefresh",
+            "type": "checkbox",
+            "defaultValue": true
+        },
+        "mode": {
+            "label": "Mode",
+            "type": "select",
+            "options": [
+                "Single",
+                "Multiple",
+                "Auto"
+            ],
+            "defaultValue": "Auto"
+        },
+        "appearance": {
+            "label": "Appearance",
+            "settings": {
+                "useTheme": {
+                    "label": "Use theme",
+                    "type": "checkbox",
+                    "defaultValue": true,
+                    "currentValue": false
+                },
+                "theme": {
+                    "label": "Theme",
+                    "type": "select",
+                    "options": [
+                        "Zebra",
+                        "Tomorrow",
+                        "Autumn"
+                    ],
+                    "defaultValue": "Zebra",
+                    "requires": "my_userscript.appearance.useTheme"
+                }
+            }
+        }
+    }
+}
