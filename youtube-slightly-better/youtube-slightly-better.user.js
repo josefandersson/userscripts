@@ -20,6 +20,7 @@
 //        - (opt-in to) Remember video titles and uploader so that we can fill the void when videos are removed
 //        - Disable autoplaying 'channel trailer' video on channel page
 //        - Minimize player when scrolling down
+//        - Timestamp marker with notes, popup list to jump to timestamp on video
 
 const ENABLED_MODULES = ['mProgress', 'mPlaybackRate', 'mOpenThumbnail', 'mScreenshot', 'mGoToTimestamp', 'mHistory', 'mTrim'];
 
@@ -202,9 +203,9 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mPlaybackRate = class mPlaybackRate extends mModule {
         constructor() {
             super();
-            this.slower = this.addItem(new mItemBtnHold(this, 'S'));
-            this.speed = this.addItem(new mItemBtn(this, this.getPlaybackRateStr()));
-            this.faster = this.addItem(new mItemBtnHold(this, 'F'));
+            this.slower = this.addItem(new mItemBtnHold(this, 'S', 'Derease playback rate'));
+            this.speed = this.addItem(new mItemBtn(this, this.getPlaybackRateStr(), 'Current playback rate'));
+            this.faster = this.addItem(new mItemBtnHold(this, 'F', 'Increase playback rate'));
             this.slower.addOnClick(() => this.changePlaybackRate(-currentValues.keyPressRate));
             this.speed.addOnClick(() => {
                 if (!this.setPlaybackRate(1))
@@ -239,7 +240,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mOpenThumbnail = class mOpenThumbnail extends mModule {
         constructor() {
             super();
-            this.open = this.addItem(new mItemBtn(this, 'B'));
+            this.open = this.addItem(new mItemBtn(this, 'B', 'Open thumbnail'));
             this.open.addOnClick(() => this.openThumbnail());
             this.registerKeys(['b']);
         }
@@ -272,7 +273,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mScreenshot = class mScreenshot extends mModule {
         constructor() {
             super();
-            this.screenshot = this.addItem(new mItemBtn(this, 'H'));
+            this.screenshot = this.addItem(new mItemBtn(this, 'H', 'Take screenshot'));
             this.screenshot.addOnClick(() => this.takeScreenshot());
             this.registerKeys(['h']);
         }
@@ -304,7 +305,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mGoToTimestamp = class mGoToTimestamp extends mModule {
         constructor() {
             super();
-            this.goto = this.addItem(new mItemBtn(this, 'G'));
+            this.goto = this.addItem(new mItemBtn(this, 'G', 'Go to timestamp'));
             this.goto.addOnClick(() => this.handleOnClick());
             this.registerKeys(['g']);
             this.registerKeys(['Escape'], 'keyup');
@@ -376,7 +377,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mHistory = class mHistory extends mModule {
         constructor() {
             super();
-            this.seen = this.addItem(new mItemBtn(this, '-'));
+            this.seen = this.addItem(new mItemBtn(this, '-', 'Number of times watched by you'));
             this.seen.addOnClick(() => this.onClick());
             this.currentPlaytime = 0;
             this.isPlaying = false;
@@ -453,7 +454,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mProgress = class mProgress extends mModule {
         constructor() {
             super();
-            this.progress = this.addItem(new mItemTxt(this, '0%'));
+            this.progress = this.addItem(new mItemTxt(this, '0%', 'Video progress'));
             this.percent = 0;
             video.addEventListener('loadeddata', ev => this.updateProgression());
             video.addEventListener('timeupdate', ev => this.updateProgression());
@@ -482,7 +483,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mTrim = class mTrim extends mModule {
         constructor() {
             super();
-            this.trim = this.addItem(new mItemBtn(this, 'T'));
+            this.trim = this.addItem(new mItemBtn(this, 'T', 'Trim'));
             this.trim.addOnClick(() => this.handleOnClick());
             this.registerKeys(['y']);
             video.addEventListener('loadeddata', ev => this.onChange(ev));
@@ -632,14 +633,16 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
         }
     }
     class mItemTxt extends mItem { // displays text
-        constructor(module, str) {
+        constructor(module, str, title=null) {
             super(module);
             this.element.innerText = str;
+            if (this.element.title)
+                this.element.title = title;
         }
     }
     class mItemBtn extends mItemTxt { // click handle
-        constructor(module, str) {
-            super(module, str);
+        constructor(module, str, title=null) {
+            super(module, str, title);
             this.element.classList.add('btn');
             this.onClickCbs = [];
             this.element.onclick = ev => this.onClick(ev);
@@ -652,8 +655,8 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
         }
     }
     class mItemBtnHold extends mItemBtn { // click handle and hold handle
-        constructor(module, str, clickDelay=200, clickRate=100) {
-            super(module, str);
+        constructor(module, str, title=null, clickDelay=200, clickRate=100) {
+            super(module, str, title);
             this.clickDelay = clickDelay;
             this.clickRate = clickRate;
             this.element.onmousedown = ev => this.onDown(ev);
@@ -683,8 +686,8 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
         onClick() { this.onClickCbs.forEach(cb => cb()); }
     }
     class mItemToggle extends mItemBtn { // togglable button
-        constructor(module, str, state=false) {
-            super(module, str);
+        constructor(module, str, title=null, state=false) {
+            super(module, str, title);
             this.state = state;
             this.onChangeCbs = [];
         }
