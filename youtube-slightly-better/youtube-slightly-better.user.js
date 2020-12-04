@@ -636,8 +636,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
         constructor(module, str, title=null) {
             super(module);
             this.element.innerText = str;
-            if (this.element.title)
-                this.element.title = title;
+            if (title) this.element.title = title;
         }
     }
     class mItemBtn extends mItemTxt { // click handle
