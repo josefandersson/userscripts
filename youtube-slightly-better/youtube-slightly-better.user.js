@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.33
+// @version      1.34
 // @description  Adds some extra features to YouTube
 // @author       DrDoof
 // @match        https://www.youtube.com/*
@@ -22,7 +22,7 @@
 //        - Minimize player when scrolling down
 //        - Timestamp marker with notes, popup list to jump to timestamp on video
 
-const ENABLED_MODULES = ['mProgress', 'mPlaybackRate', 'mOpenThumbnail', 'mScreenshot', 'mGoToTimestamp', 'mHistory', 'mTrim'];
+const ENABLED_MODULES = ['mProgress', 'mPlaybackRate', 'mOpenThumbnail', 'mScreenshot', 'mGoToTimestamp', 'mHistory', 'mTrim', 'mCopy'];
 
 const MIN_PLAYBACK_RATE = .1;
 const MAX_PLAYBACK_RATE = 3;
@@ -506,6 +506,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
         }
     }
 
+
     const TRIM_PROXIMITY = .99;
 
     // ===========
@@ -661,6 +662,38 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
 
 
 
+    // ===========
+    // Copy Module
+    // ===========
+    //
+    // - Copy video with timestamp to clipboard
+    //
+    mModule.mCopy = class mCopy extends mModule {
+        constructor() {
+            super();
+            this.registerKeys(['c']);
+        }
+        onKey(ev) {
+            super.onKey(ev);
+            if (!video.duration)
+                return;
+            const prms = new URLSearchParams(location.search);
+            const vid = prms.get('v');
+            if (!vid)
+                return;
+            const units = video.duration < 3600 ? [60,1] : [3600,60,1];
+            const unitNms = ['s', 'm', 'h'];
+            let cur = Math.round(video.currentTime);
+            const time = units.map((v, i) => {
+                const nv = Math.floor(cur/v);
+                cur %= v;
+                return (nv < 10 ? `0${nv}` : nv) + unitNms[units.length-1-i];
+            }).join('');
+            navigator.clipboard.writeText(`https://youtu.be/${vid}?t=${time}`);
+        }
+    }
+
+
     // ==========
     // Menu Items
     // ==========
@@ -746,7 +779,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
 `.ytbc{float:right;color:white;}
 .ytbc>div{display:inline-block;margin:0 4px;}
 .ytbc>div>span{margin:0 2px;}.ytbc .btn{cursor:pointer;}
-.ytbc-p{z-index:1000;position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;backdrop-filter:blur(1.5px);}
+.ytbc-p{z-index:1000;position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;/*backdrop-filter:blur(1.5px);*/}
 .ytbc-p>input{
     pointer-events:auto;position:fixed;top:50vh;left:50vw;transform:translate(-50%,-50%);
     color:#350505;background-color:#d019108c;font-size:20px;padding:10px;border:none;text-align:center;}

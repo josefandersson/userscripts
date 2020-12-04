@@ -13,6 +13,7 @@ A bitter attempt at making the YouTube experience better. This script adds a few
 | History | Remember all watched videos and print how many times current video has been watched. | | yes |
 | Progress | Show video progression below the video (percentage, time passed or time left). | p | yes |
 | Trim | Set trims for when video is autoplayed (eg. good for music videos in playlists). Video parts not within trims will be skipped. | y | yes |
+| Copy | Copy video url with current timestamp. | c | yes |
 
 ## Installation
 
