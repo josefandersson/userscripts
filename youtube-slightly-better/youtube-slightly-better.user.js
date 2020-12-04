@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.32
+// @version      1.33
 // @description  Adds some extra features to YouTube
 // @author       DrDoof
 // @match        https://www.youtube.com/*
@@ -35,6 +35,7 @@ const MIN_TIME_WATCHED_BEFORE_SEEN = 7000; // n milliseconds or 80% of video len
 // User settings
 // =============
 const currentValues = GM_getValue('settings', { keyPressRate:0, playbackRateStep:.05, mProgressEnabled:true, mPlaybackRate:true, mOpenThumbnail:true, mScreenshot:true, mGoToTimestamp:true, mHistory:true });
+console.log(currentValues)
 const settings = new UserscriptSettings({
     youtubeSlightlyBetter: {
         label: 'YouTube Slightly Better',
@@ -203,15 +204,15 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mPlaybackRate = class mPlaybackRate extends mModule {
         constructor() {
             super();
-            this.slower = this.addItem(new mItemBtnHold(this, 'S', 'Derease playback rate'));
-            this.speed = this.addItem(new mItemBtn(this, this.getPlaybackRateStr(), 'Current playback rate'));
-            this.faster = this.addItem(new mItemBtnHold(this, 'F', 'Increase playback rate'));
-            this.slower.addOnClick(() => this.changePlaybackRate(-currentValues.keyPressRate));
+            this.slower = this.addItem(new mItemBtnHold(this, 'S', 'Derease playback rate\nKeybinding: a'));
+            this.speed = this.addItem(new mItemBtn(this, this.getPlaybackRateStr(), 'Reset playback rate\nKeybinding: s'));
+            this.faster = this.addItem(new mItemBtnHold(this, 'F', 'Increase playback rate\nKeybinding: d'));
+            this.slower.addOnClick(() => this.changePlaybackRate(-currentValues.playbackRateStep));
             this.speed.addOnClick(() => {
                 if (!this.setPlaybackRate(1))
                     this.clearDown();
             });
-            this.faster.addOnClick(() => this.changePlaybackRate(PLAYBACK_STEP));
+            this.faster.addOnClick(() => this.changePlaybackRate(currentValues.playbackRateStep));
             this.registerKeys(['a', 's', 'd']);
         }
         getPlaybackRateStr() { return video.playbackRate.toFixed(2) + ''; }
@@ -240,7 +241,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mOpenThumbnail = class mOpenThumbnail extends mModule {
         constructor() {
             super();
-            this.open = this.addItem(new mItemBtn(this, 'B', 'Open thumbnail'));
+            this.open = this.addItem(new mItemBtn(this, 'B', 'Open video thumbnail\nKeybinding: b'));
             this.open.addOnClick(() => this.openThumbnail());
             this.registerKeys(['b']);
         }
@@ -273,7 +274,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mScreenshot = class mScreenshot extends mModule {
         constructor() {
             super();
-            this.screenshot = this.addItem(new mItemBtn(this, 'H', 'Take screenshot'));
+            this.screenshot = this.addItem(new mItemBtn(this, 'H', 'Take screenshot (video resolution decides image dimensions)\nKeybinding: h'));
             this.screenshot.addOnClick(() => this.takeScreenshot());
             this.registerKeys(['h']);
         }
@@ -305,7 +306,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mGoToTimestamp = class mGoToTimestamp extends mModule {
         constructor() {
             super();
-            this.goto = this.addItem(new mItemBtn(this, 'G', 'Go to timestamp'));
+            this.goto = this.addItem(new mItemBtn(this, 'G', 'Open go-to-timestamp prompt\nKeybinding: g'));
             this.goto.addOnClick(() => this.handleOnClick());
             this.registerKeys(['g']);
             this.registerKeys(['Escape'], 'keyup');
@@ -377,7 +378,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mHistory = class mHistory extends mModule {
         constructor() {
             super();
-            this.seen = this.addItem(new mItemBtn(this, '-', 'Number of times watched by you'));
+            this.seen = this.addItem(new mItemBtn(this, '-', 'Prints number of times you have watched this video\nRed texts means current viewing is not yet counted\nGreen texts means number includes current viewing\nLeft-click: Add current viewing to count (make number green)'));
             this.seen.addOnClick(() => this.onClick());
             this.currentPlaytime = 0;
             this.isPlaying = false;
@@ -454,17 +455,54 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mProgress = class mProgress extends mModule {
         constructor() {
             super();
-            this.progress = this.addItem(new mItemTxt(this, '0%', 'Video progress'));
-            this.percent = 0;
-            video.addEventListener('loadeddata', ev => this.updateProgression());
-            video.addEventListener('timeupdate', ev => this.updateProgression());
+            this.progress = this.addItem(new mItemBtn(this, '0%', 'Video progression\nLeft-click: Cycle mode'));
+            this.progress.addOnClick(() => this.handleOnClick());
+            this.mode = 'percentage';
+            this.registerKeys(['p']);
+            video.addEventListener('loadeddata', () => this.onChange());
+            video.addEventListener('timeupdate', () => this.updateProgression());
+            this.onChange();
+        }
+        handleOnClick() {
+            const modes = ['percentage', 'time', 'timeleft'];
+            this.mode = modes[(modes.indexOf(this.mode) + 1) % modes.length];
+            this.updateProgression();
+        }
+        onChange() {
+            this.units = video.duration < 3600 ? [60,1] : [3600,60,1];
+            this.updateProgression();
+        }
+        onKey(ev) {
+            super.onKey(ev);
+            this.handleOnClick();
         }
         updateProgression() {
-            const newPercentage = Math.round(video.currentTime / video.duration * 100);
-            if (newPercentage !== this.percent) {
-                this.percent = newPercentage;
-                this.progress.element.innerText = `${this.percent}%`;
+            if (!video.duration)
+                return;
+            let newValue;
+            switch (this.mode) {
+                case 'percentage':
+                    newValue = Math.round(video.currentTime / video.duration * 100);
+                    if (newValue === this.oldValue)
+                        return;
+                    newValue = this.oldValue = `${newValue}%`;
+                    break;
+                case 'time':
+                    newValue = Math.round(video.currentTime);
+                    if (newValue === this.oldValue)
+                        return;
+                    newValue = this.oldValue = this.units.map(v => { const nv=Math.floor(newValue/v); newValue%=v; return nv < 10 ? `0${nv}` : nv; }).join(':');
+                    break;
+                case 'timeleft':
+                    newValue = Math.round(video.duration - video.currentTime);
+                    if (newValue === this.oldValue)
+                        return;
+                    newValue = this.oldValue = this.units.map(v => { const nv=Math.floor(newValue/v); newValue%=v; return nv < 10 ? `0${nv}` : nv; }).join(':');
+                    break;
+                default:
+                    return;
             }
+            this.progress.element.innerText = newValue;
         }
     }
 
