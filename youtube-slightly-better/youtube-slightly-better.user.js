@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.34
+// @version      1.35
 // @description  Adds some extra features to YouTube
 // @author       DrDoof
 // @match        https://www.youtube.com/*
@@ -687,6 +687,8 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             const time = units.map((v, i) => {
                 const nv = Math.floor(cur/v);
                 cur %= v;
+                if (nv === 0)
+                    return '';
                 return (nv < 10 ? `0${nv}` : nv) + unitNms[units.length-1-i];
             }).join('');
             navigator.clipboard.writeText(`https://youtu.be/${vid}?t=${time}`);
