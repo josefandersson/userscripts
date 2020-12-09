@@ -4,6 +4,7 @@ This repo is a collection of public userscripts created by me. Check out the REA
 
 ## Userscripts in _this_ repo
 
+- [__duckduckgo-force-mode__](https://github.com/josefandersson/userscripts/tree/master/duckduckgo-force-mode) - Force search mode on duckduckgo.com. (Strict, moderate or off)
 - [__HF-keyboard-shortcuts__](https://github.com/josefandersson/userscripts/tree/master/HF-keyboard-shortcuts) - Navigate hackforums using keyboard shortcuts.
 - [__HF-quote-images__](https://github.com/josefandersson/userscripts/tree/master/HF-quote-images) - Automatically put quoted images into spoiler tags.
 - [__HF-real-ignore-user__](https://github.com/josefandersson/userscripts/tree/master/HF-real-ignore-user) - Remove the posts of users you ignore completely and not just hide them.
