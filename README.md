@@ -28,3 +28,7 @@ Userscripts are not standalone plugins/extensions for your browser, instead they
 I recommend [Tampermonkey for Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) or [Tampermonkey for Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/).
 
 When you have installed the userscript manager you will be able to install userscripts. This can be done manually by copying the userscript code into the userscript managers dashboard OR by visiting an url ending with .user.js (eg. hello-world.user.js). The latter is recommended because then you will also receive automatic updates for the userscript.
+
+## Extra note
+
+I _love_ writing userscripts. If you have got any ideas for scripts that you a) need yourself, or b) think would be for the greater good of humanity; shoot me a message on any of my social medias found [on my website](https://josf.dev#contact). (Though if it's a script _only useful for yourself_ you may have to pay for it...)
