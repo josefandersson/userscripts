@@ -35,7 +35,6 @@ const MIN_TIME_WATCHED_BEFORE_SEEN = 7000; // n milliseconds or 80% of video len
 // User settings
 // =============
 const currentValues = GM_getValue('settings', { keyPressRate:0, playbackRateStep:.05, mProgressEnabled:true, mPlaybackRate:true, mOpenThumbnail:true, mScreenshot:true, mGoToTimestamp:true, mHistory:true });
-console.log(currentValues)
 const settings = new UserscriptSettings({
     youtubeSlightlyBetter: {
         label: 'YouTube Slightly Better',
@@ -671,7 +670,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     mModule.mCopy = class mCopy extends mModule {
         constructor() {
             super();
-            this.registerKeys(['c']);
+            this.registerKeys(['v']);
         }
         onKey(ev) {
             super.onKey(ev);
