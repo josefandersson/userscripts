@@ -301,6 +301,13 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     //
     // - Prompt for timestamp by clicking on G.
     // - Use keybinding g to open prompt.
+    // - Prompt formatting examples:
+    //   05:03 -> 5m3s
+    //   7:9:23 -> 7h9m23s
+    //   :24 -> 24s
+    //   19 -> 19m
+    //   1: -> 1h
+    //   You may use a literal space (' ') instead of colon (':').
     //
     mModule.mGoToTimestamp = class mGoToTimestamp extends mModule {
         constructor() {
@@ -315,17 +322,21 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
         }
         onKey(ev) {
             super.onKey(ev);
-            if (ev.key === 'g') {
+            if (ev.key === 'g')
                 this.handleOnClick();
-            } else {
-                console.log('onKeYYdfasfdDF:', ev.key);
-            }
         }
         goToTimestamp(str) {
-            let [s, m, h] = str.split(':').reverse();
-            s = +s.replace(/^0*/, '');
-            if (m) s += (+m.replace(/^0*/, ''))*60;
-            if (h) s += (+h.replace(/^0*/, ''))*3600;
+            let t = [];
+            if (/^[0-5]?[0-9]$/.test(str)) { // 20,30,35 (implied minutes)
+                t[1] = str;
+            } else if (/^[0-9]+[hms]$/.test(str)) { // 19h,20m,21s (specified unit)
+                t[['s','m','h'].indexOf(str[str.length-1])] = str.substr(0, str.length-1);
+            } else if (/^[0-5]?[0-9][: ]$/.test(str)) { // 07:,1: (implied hours)
+                t[2] = str.substr(0, str.length-1);
+            } else { // 01:02:03,02:03,03 (normal)
+                t = str.split(/[: ]/).reverse().map(n => +n);
+            }
+            const s = (t[0]||0) + (t[1]||0) * 60 + (t[2]||0) * 3600;
             if (s < video.duration)
                 video.currentTime = s;
         }
@@ -333,8 +344,8 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             if (this.prompt) return this.closePrompt();
             this.prompt = cr('div', { className:'ytbc-p' });
             const input = cr('input', { type:'text', autofill:'off', size:1 });
-            const allowedTimestamp = /^[0-5]{0,1}[0-9]{1}(:[0-5]{0,1}[0-9]{1}){0,2}$/;
-            const badCharacters = /[^0-9:]/g;
+            const allowedTimestamp = /^([0-5]?[0-9](([: ][0-5]?[0-9]){0,2}|[hms: ]))|([: ][0-5]?[0-9])$/;
+            const badCharacters = /[^0-9: hms]/g;
             input.addEventListener('input', ev => {
                 if (ev.data && badCharacters.test(ev.data))
                     input.value = input.value.replace(badCharacters, '');
@@ -352,7 +363,8 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
                     if (allowedTimestamp.test(input.value))
                         this.goToTimestamp(input.value);
                     this.closePrompt();
-                }
+                } else if (ev.key === 'g')
+                    this.closePrompt();
             });
             input.addEventListener('focusout', () => setTimeout(() => this.closePrompt(), 50));
             this.prompt.appendChild(input);
@@ -780,7 +792,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
 `.ytbc{float:right;color:white;}
 .ytbc>div{display:inline-block;margin:0 4px;}
 .ytbc>div>span{margin:0 2px;}.ytbc .btn{cursor:pointer;}
-.ytbc-p{z-index:1000;position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;/*backdrop-filter:blur(1.5px);*/}
+.ytbc-p{z-index:1000;position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;background-color:#2237;}
 .ytbc-p>input{
     pointer-events:auto;position:fixed;top:50vh;left:50vw;transform:translate(-50%,-50%);
     color:#350505;background-color:#d019108c;font-size:20px;padding:10px;border:none;text-align:center;}
