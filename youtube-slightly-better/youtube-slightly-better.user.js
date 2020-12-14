@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.37
+// @version      1.38
 // @description  Adds some extra features to YouTube
 // @author       DrDoof
 // @match        https://www.youtube.com/*
@@ -21,13 +21,17 @@
 //        - Disable autoplaying 'channel trailer' video on channel page
 //        - Minimize player when scrolling down
 //        - Timestamp marker with notes, popup list to jump to timestamp on video
+//        - Paste feature to paste timestamp or link with timestamp, then jump to it instead of having to reload page
+//        - Rewrite history module, if video is replayed without reloaded add extra plays to history, also save video title and uploader name,
+//          use video progression every second to check playtime instead of real life time since the video can be speed up/down
+//        - Add a video object that handles onChange instead of modules individually, along with other cross-module related functions and vars
 
 const ENABLED_MODULES = ['mProgress', 'mPlaybackRate', 'mOpenThumbnail', 'mScreenshot', 'mGoToTimestamp', 'mHistory', 'mTrim', 'mCopy'];
 
 const MIN_PLAYBACK_RATE = .1;
 const MAX_PLAYBACK_RATE = 3;
 const PLAYBACK_STEP = .05;
-const MIN_TIME_WATCHED_BEFORE_SEEN = 7000; // n milliseconds or 80% of video length
+const MIN_PERCENTAGE_BEFORE_SEEN = .8;
 
 
 
@@ -391,7 +395,6 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             super();
             this.seen = this.addItem(new mItemBtn(this, '-', 'Prints number of times you have watched this video\nRed texts means current viewing is not yet counted\nGreen texts means number includes current viewing\nLeft-click: Add current viewing to count (make number green)'));
             this.seen.addOnClick(() => this.onClick());
-            this.currentPlaytime = 0;
             this.isPlaying = false;
             video.addEventListener('loadeddata', ev => this.onChange(ev));
             video.addEventListener('play', ev => this.onPlay(ev));
@@ -400,9 +403,11 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
         }
         onChange() {
             const prevVideoId = this.videoId;
-            this.isCounted = false;
             this.videoId = new URLSearchParams(location.search).get('v');
             if (this.videoId && this.videoId !== prevVideoId) {
+                this.isCounted = false; // TODO: remove
+                this.replays = 1;
+                this.startedWatchingAt = Date.now();
                 this.historyData = GM_getValue(`h-${this.videoId}`, null);
                 if (this.historyData) {
                     this.seen.element.innerText = this.historyData.n;
@@ -411,7 +416,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
                     this.seen.element.innerText = '0';
                     this.seen.element.style.color = 'inherit';
                 }
-                this.minimumTime = Math.min(MIN_TIME_WATCHED_BEFORE_SEEN, video.duration * 800);
+                this.minimumTime = MIN_PERCENTAGE_BEFORE_SEEN * video.duration * 1000;
                 this.onPause();
                 this.currentPlaytime = 0;
                 if (!video.paused)
@@ -422,8 +427,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             if (!this.isPlaying) {
                 this.isPlaying = true;
                 this.startedPlayingAt = Date.now();
-                if (!this.isCounted)
-                    this.timeoutId = setTimeout(() => this.makeCounted(), Math.max(this.minimumTime - this.currentPlaytime, 0));
+                this.timeoutId = setTimeout(() => this.makeCounted(), Math.max(this.minimumTime * this.replays - this.currentPlaytime, 0));
             }
         }
         onPause() {
@@ -437,22 +441,37 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             }
         }
         onClick() {
-            this.makeCounted();
-            // TODO: add a removeCounted method if user want to undo last record?
+            if (this.isCounted)
+                this.makeUncounted();
+            else
+                this.makeCounted();
         }
         makeCounted() {
-            if (!this.isCounted) {
-                this.isCounted = true;
-                const startedWatchingAt = this.startedWatchingAt || Date.now();
-                if (this.historyData) {
-                    this.historyData.l = startedWatchingAt;
-                    this.historyData.n ++;
-                } else
-                    this.historyData = { f:startedWatchingAt, l:startedWatchingAt, n:1 };
-                GM_setValue(`h-${this.videoId}`, this.historyData);
-                this.seen.element.style.color = '#4af150';
-                this.seen.element.innerText = this.historyData.n;
-            }
+            if (this.isCounted)
+                return;
+            this.isCounted = true;
+            this.replays ++;
+            const startedWatchingAt = this.startedWatchingAt || Date.now();
+            if (this.historyData) {
+                this.previousL = this.historyData.l;
+                this.historyData.l = startedWatchingAt;
+                this.historyData.n ++;
+            } else
+                this.historyData = { f:startedWatchingAt, l:startedWatchingAt, n:1 };
+            GM_setValue(`h-${this.videoId}`, this.historyData);
+            this.seen.element.style.color = '#4af150';
+            this.seen.element.innerText = this.historyData.n;
+        }
+        makeUncounted() {
+            if (!this.isCounted)
+                return;
+            this.isCounted = false;
+            this.replays --;
+            this.historyData.l = this.previousL;
+            this.historyData.n --;
+            GM_setValue(`h-${this.videoId}`, this.historyData);
+            this.seen.element.style.color = '#ff4343';
+            this.seen.element.innerText = this.historyData.n;
         }
     }
 
