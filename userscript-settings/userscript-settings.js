@@ -18,12 +18,12 @@ if (typeof UserscriptSettings === 'undefined') {
      * create popup and handle showing and closing settings window. Used to get set
      * values.
      */
-    UserscriptSettings = function UserscriptSettings(settings, options) {
+    UserscriptSettings = function UserscriptSettings(settings) {
         this.settings = settings;
-        this.options = options;
 
         Object.assign(this.constructor.vars.settings, settings);
         this.constructor.vars.node.applySettings(settings);
+        this.constructor.vars.node.setupConditions();
 
         this.hide = () => this.constructor.hide();
         this.show = () => this.constructor.show();
@@ -44,6 +44,7 @@ if (typeof UserscriptSettings === 'undefined') {
         this.index = 0;
         this.key = key;
         this.onChange = [];
+        this.onUnsavedChange = [];
         this.parent = null;
         this.type = 'section';
 
@@ -58,10 +59,16 @@ if (typeof UserscriptSettings === 'undefined') {
         };
 
         /**
-         * Add a callback
-         * @param {Function} cb 
+         * Add an onChange callback
+         * @param {Function} cb Callback
          */
         this.addOnChange = cb => this.onChange.push(cb);
+
+        /**
+         * Add an onUnsavedChange callback
+         * @param {Function} cb Callback
+         */
+        this.addOnUnsavedChange = cb => this.onUnsavedChange.push(cb);
 
         /**
          * Create children and grandchildren from settings descriptor.
@@ -74,6 +81,41 @@ if (typeof UserscriptSettings === 'undefined') {
         };
 
         /**
+         * Setup conditions. Should be called ONCE after all nodes have been created.
+         */
+        this.setupConditions = () => {
+            if (this.type === 'section') {
+                this.forEachChild(c => c.setupConditions());
+            } else if (this.conditions) {
+                this.conditions.forEach(con => {
+                    const ref = this.parent.find(...con.path);
+                    ref.addOnUnsavedChange(newVal => {
+                        console.log('addOnUnsavedChange', newVal, con.value, con.invert);
+                        if ((newVal === con.value) !== !!con.invert) {
+                            console.log('  trigger')
+                            // trigger
+                            if (con.action === 'disable') {
+                                this.element.disabled = true;
+                                this.element.classList.add('disabledAction');
+                            } else {
+                                this.element.classList.add('hiddenAction');
+                            }
+                        } else {
+                            console.log('  untrigger')
+                            // untrigger
+                            if (con.action === 'disable') {
+                                this.element.disabled = false;
+                                this.element.classList.remove('disabledAction');
+                            } else {
+                                this.element.classList.remove('hiddenAction');
+                            }
+                        }
+                    });
+                });
+            }
+        };
+
+        /**
          * Create element for this node and return it. If this is a section then
          * also create element for child nodes and add to this node's element.
          */
@@ -81,6 +123,7 @@ if (typeof UserscriptSettings === 'undefined') {
             let element = cr('div');
             const thisPath = `${parentPath}${this.key||''}`;
             if (this.type === 'section') {
+                element.classList.add('usstngs-sec');
                 const title = 1 < depth ? this.title : 'Userscript Settings';
                 element.appendChild(cr(`h${depth}`, { innerText:title }));
                 Object.values(this.children).forEach(c => element.appendChild(c.createElement(depth+1, `${thisPath}-`)));
@@ -106,6 +149,7 @@ if (typeof UserscriptSettings === 'undefined') {
                 input.addEventListener('change', () => input.classList[this.setUnsavedValue(input[key]) ? 'add' : 'remove']('hasUnsaved'));
                 element.appendChild(input);
             }
+            this.element = element; // TODO: Delete this.element when popup closes
             return element;
         };
 
@@ -114,14 +158,31 @@ if (typeof UserscriptSettings === 'undefined') {
          * @param   {...String} path Relative path to (grand)child
          * @returns {Node|null} Child node
          */
-        this.find = (...path) => path.length ? this.children[path.shift()]?.find(...path) : this;
+        this.find = (...path) => {
+            if (path.length) {
+                const p = path.shift();
+                let node;
+                switch (p) {
+                    case '..': node = this.parent; break;
+                    case '/': node = UserscriptSettings.vars.node; break;
+                    default: node = this.children[p];
+                }
+                return node?.find(...path);
+            }
+            return this;
+        };
 
         /**
-         * Loops children and passes child to function.
+         * Loops children and passes child to function. If this node is not
+         * a section then it passes itself to the function instead.
          * @param {Function} cb Function
          * @returns {Boolean} Whether any calls returned true
          */
-        this.forEachChild = (cb) => !!Object.values(this.children).reduce((t, v) => cb(v) || t, false);
+        this.forEachChild = (cb) => {
+            if (this.type === 'section')
+                return !!Object.values(this.children).reduce((t, child) => child.forEachChild(cb) || t, false);
+            return !!cb(this);
+        };
 
         /**
          * Get value from node. If node is a section, then a object is returned with
@@ -150,12 +211,6 @@ if (typeof UserscriptSettings === 'undefined') {
         this.reset = () => {
             if (this.type === 'section') {
                 return this.forEachChild(c => c.reset());
-                // let changed = false;
-                // Object.values(this.children).forEach(c => {
-                //     if (c.reset())
-                //         changed = true;
-                // });
-                // return changed;
             } else {
                 this.setUnsavedValue(this.defaultValue);
                 return this.save();
@@ -189,6 +244,7 @@ if (typeof UserscriptSettings === 'undefined') {
          * @returns {Boolean} Whether node has an unsaved value
          */
         this.setUnsavedValue = newVal => {
+            this.onUnsavedChange.forEach(cb => cb(newVal));
             this.unsavedValue = newVal;
             if (this.unsavedValue === this.currentValue) {
                 delete this.unsavedValue;
@@ -202,37 +258,36 @@ if (typeof UserscriptSettings === 'undefined') {
             this.title = descriptor[0];
             this.type = descriptor[1];
 
-            let reqi = -1;
+            let coni = -1;
             switch (descriptor[1]) {
                 case 'section':
                     this.applySettings(descriptor[2]);
-                    reqi = 3; break;
+                    coni = 3; break;
                 case 'checkbox':
                     this.defaultValue = descriptor[2] != null ? descriptor[2] : true;
                     this.currentValue = descriptor[3] != null ? descriptor[3] : this.defaultValue;
-                    reqi = 4; break;
+                    coni = 4; break;
                 case 'text':
                     this.defaultValue = descriptor[2] || '';
                     this.currentValue = descriptor[3] || this.defaultValue;
-                    reqi = 4; break;
+                    coni = 4; break;
                 case 'number':
                     this.defaultValue = descriptor[2] != null ? descriptor[2] : 0;
                     this.currentValue = descriptor[3] != null ? descriptor[3] : this.defaultValue;
                     this.min = descriptor[4];
                     this.max = descriptor[5];
                     this.step = descriptor[6];
-                    reqi = 7; break;
+                    coni = 7; break;
                 case 'select':
                     this.options = descriptor[2];
                     this.defaultValue = descriptor[3] || this.options[0];
                     this.currentValue = descriptor[4] || this.defaultValue;
-                    reqi = 5; break;
+                    coni = 5; break;
                 default: throw new Error("Unknown setting type");
             }
 
-            if (descriptor[reqi]) {
-                // TODO: Find required node, reference it, and add listener to see it change value
-            };
+            if (descriptor[coni])
+                this.conditions = descriptor[coni];
         }
     };
 
@@ -294,8 +349,16 @@ if (typeof UserscriptSettings === 'undefined') {
         // Create settings elements
         const container = this.vars.node.createElement();
 
+        // Check all connditions
+        this.vars.node.forEachChild(c => {
+            if (c.type === 'section') {
+            }
+            console.log('Looping', c.key);
+            c.onUnsavedChange.forEach(cb => cb(c.currentValue))
+        });
+
         // Create button elements
-        const btns = cr('div');
+        const btns = cr('nav');
         [['Import', ()=>this.importPrompt()], ['Export', ()=>this.export()], ['Reset', ()=>this.reset()], ['Save', ()=>this.save()], ['Close', ()=>this.hide()]].forEach(([text, cb]) => {
             const btn = cr('button', { innerText:text });
             btn.addEventListener('click', cb);
@@ -304,7 +367,7 @@ if (typeof UserscriptSettings === 'undefined') {
         container.appendChild(btns);
 
         // Create tinted background
-        const background = cr('div', { className:'userscriptSettings' });
+        const background = cr('div', { className:'usstngs' });
         background.appendChild(container);
         background.addEventListener('click', ev => {
             if (ev.target === background)
@@ -346,16 +409,27 @@ if (typeof UserscriptSettings === 'undefined') {
     UserscriptSettings.injectStyle = function() {
         this.vars.injected = true;
         document.head.appendChild(cr('style', { innerHTML:
-`.userscriptSettings{position:fixed;top:0;left:0;bottom:0;right:0;background-color:#3333;z-index:1000000}
-.userscriptSettings>div{background-color:#333;color:#ddd;width:fit-content;padding:2px 10px 10px 10px;position:absolute;top:50vh;left:50vw;transform:translate(-50%, -50%);}
-.userscriptSettings p{margin:8px 0 4px 0;}
-.userscriptSettings>div>p{font-size:20px;}
-.userscriptSettings>div div{margin-left:15px;}
-.userscriptSettings label{font-size:11px;display:block;cursor:pointer;}
-.userscriptSettings input,.userscriptSettings select,.userscriptSettings button{cursor:pointer;}
-.userscriptSettings>div>div:last-child{margin:8px 0 0 0;}
-.userscriptSettings p>span{font-size:11px;cursor:pointer;color:#999;margin-left:5px;}
-.userscriptSettings .hasUnsaved {box-shadow:0 0 8px yellow;}` }));
+`.usstngs { position:fixed;top:0;left:0;bottom:0;right:0;background-color:#4446;z-index:1000000;color:#d0d0d0;font-size:1rem;}
+.usstngs>div {background-color:#1f1f1f;width:fit-content;padding:2px 10px 10px 10px;position:absolute;top:50vh;left:50vw;transform:translate(-50%, -50%);}
+.usstngs h1,.usstngs h2,.usstngs h3,.usstngs h4,.usstngs h5,.usstngs h6{letter-spacing:unset;text-transform:unset;margin:0 0;padding:5px 0;}
+.usstngs h1{font-size:1.5em;text-align:center;color:#516a98;border-bottom:1px solid #516a98;}
+.usstngs h2{font-size:1.8em;color:brown;}
+.usstngs h3{font-size:1.3em;}
+.usstngs h4{font-size:1.2em;}
+.usstngs h5{font-size:1.1em;}
+.usstngs h6{font-size:1em;}
+.usstngs>div div.usstngs-sec{margin:10px 0 10px 4px;padding-left:4px;border-left:2px solid brown;}
+.usstngs nav{border-top:1px solid #516a98;padding-top:5px;}
+.usstngs nav button{background-color:#516a98;border:1px solid #2f3848;color:#d0d0d0;font-weight:bold;}
+.usstngs nav button:hover{background-color:#2f3848;}
+.usstngs>div>p{font-size:20px;}
+.usstngs label{font-size:11px;display:block;cursor:pointer;}
+.usstngs input,.usstngs select,.usstngs button{cursor:pointer;}
+.usstngs>div>div:last-child{margin:8px 0 0 0;}
+.usstngs p>span{font-size:11px;cursor:pointer;color:#999;margin-left:5px;}
+.usstngs .hasUnsaved {box-shadow:0 0 8px yellow;}
+.usstngs .hiddenAction {display:none;}
+.usstngs .disabledAction {color:red;}` }));
     };
 
     /**

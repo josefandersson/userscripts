@@ -4,7 +4,7 @@
         "mode": ["Mode", "select", ["Single", "Multiple", "Auto"], "Auto"],
         "appearance": ["Appearance", "section", {
             "useTheme": ["Use theme", "checkbox", true, false],
-            "theme": ["Theme", "select", ["Zebra", "Tomorrow", "Autumn"], 0, null, [["useTheme", true]]]
+            "theme": ["Theme", "select", ["Zebra", "Tomorrow", "Autumn"], 0, null, [{ "path":["useTheme"], "value":true, "action":"hide" }]]
         }]
     }]
 }

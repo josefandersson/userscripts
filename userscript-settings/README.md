@@ -76,6 +76,8 @@ It should be an array of condition objects with the following available keys:
 
 ### Paths
 
+Paths are useful when adding a onChange callback since you can specify a path to the node of which you want to add a listener to.
+
 All settings (nodes) are placed in a node tree. Paths are used to navigate the tree.
 
 A path is one or multiple strings where each string is one node down the tree.
@@ -85,7 +87,7 @@ If we use the following node tree as an example:
 ```json
 {
     "group1": {
-        "Adolf": 1,
+        "Adolf": true,
         "Edmund": 2,
     },
     "group2": {
@@ -98,12 +100,16 @@ If we use the following node tree as an example:
 
 ...then these paths will yield these values:
 
-- `"group1", "Adolf"` -> `1`
+- `"group1", "Adolf"` -> `true`
 - `"group1", "Edmund"` -> `2`
 - `"group2", "Joseph"` -> `{Helga:3}`
 - `"group2", "Joseph", "Helga"` -> `3`
 
-This is useful when adding a onChange callback since you can specify a path to the node of which you want to add a listener to.
+When setting up conditions paths will be relative to the parent of the current setting by default. If setting up a condition on `Edmund` in the example above and requiring `Adolf` to be equal to `true` you need to specifiy `["Adolf"]` as the path, and not `["group1", "Adolf"]`.
+
+Like when navigating file system trees, you can also use `".."` to elevate to the parent.
+
+Putting `"/"` as the first item in the path will elevate to the root node. In that case you _would_ have to use `["group1", "Adolf"]` above.
 
 ### IMPORTANT
 
