@@ -1,7 +1,7 @@
 // ==UserLibrary==
 // @name          Userscript Settings
 // @namespace     https://github.com/josefandersson/userscripts/tree/master/userscript-settings
-// @version       2.0
+// @version       2.3
 // @description   Library for adding a settings popup to userscripts.
 // @author        Josef Andersson
 // ==/UserLibrary==
@@ -18,11 +18,12 @@ if (typeof UserscriptSettings === 'undefined') {
      * create popup and handle showing and closing settings window. Used to get set
      * values.
      */
-    UserscriptSettings = function UserscriptSettings(settings) {
+    UserscriptSettings = function UserscriptSettings(settings, savedValues=null) {
         this.settings = settings;
 
         Object.assign(this.constructor.vars.settings, settings);
         this.constructor.vars.node.applySettings(settings);
+        this.constructor.vars.node.applyValues(savedValues);
         this.constructor.vars.node.setupConditions();
 
         this.hide = () => this.constructor.hide();
@@ -81,6 +82,34 @@ if (typeof UserscriptSettings === 'undefined') {
         };
 
         /**
+         * Applies values from an object to children, or if not an object sets this node's value.
+         * @param {*} values 
+         */
+        this.applyValues = values => {
+            if (values == null) {
+                return;
+            } else if (typeof values === 'object' && !(values instanceof Array)) {
+                Object.entries(values).forEach(([key, val]) => {
+                    if (this.children[key]) {
+                        this.children[key].applyValues(val);
+                    } else {
+                        console.warn('Node "%s" doesnt have child node "%s" to give value "%s".', this.getPath().join('.'), key, val);
+                    }
+                });
+            } else if (typeof values === typeof this.currentValue) {
+                this.currentValue = values;
+            } else {
+                console.warn('Value "%s" is the wrong type for node "%s".', values, this.getPath().join('.'));
+            }
+        };
+
+        /**
+         * Get path to this node.
+         * @returns {...String} Path
+         */
+        this.getPath = () => this.parent == null ? [this.key] : [...this.parent.getPath(), this.key];
+
+        /**
          * Setup conditions. Should be called ONCE after all nodes have been created.
          */
         this.setupConditions = () => {
@@ -92,8 +121,6 @@ if (typeof UserscriptSettings === 'undefined') {
                     ref.addOnUnsavedChange(newVal => {
                         console.log('addOnUnsavedChange', newVal, con.value, con.invert);
                         if ((newVal === con.value) !== !!con.invert) {
-                            console.log('  trigger')
-                            // trigger
                             if (con.action === 'disable') {
                                 this.element.disabled = true;
                                 this.element.classList.add('disabledAction');
@@ -101,8 +128,6 @@ if (typeof UserscriptSettings === 'undefined') {
                                 this.element.classList.add('hiddenAction');
                             }
                         } else {
-                            console.log('  untrigger')
-                            // untrigger
                             if (con.action === 'disable') {
                                 this.element.disabled = false;
                                 this.element.classList.remove('disabledAction');
@@ -178,10 +203,12 @@ if (typeof UserscriptSettings === 'undefined') {
          * @param {Function} cb Function
          * @returns {Boolean} Whether any calls returned true
          */
-        this.forEachChild = (cb) => {
+        this.forEachChild = (cb, loopChildren=true) => {
             if (this.type === 'section')
-                return !!Object.values(this.children).reduce((t, child) => child.forEachChild(cb) || t, false);
-            return !!cb(this);
+                return !!Object.values(this.children).reduce((t, child) => (loopChildren ? child.forEachChild(cb) : cb(child)) || t, false);
+            else
+                return !!cb(this);
+            return false;
         };
 
         /**
@@ -224,13 +251,15 @@ if (typeof UserscriptSettings === 'undefined') {
         this.save = () => {
             let changed = false;
             if (this.type === 'section') {
-                changed = this.forEachChild(c => c.save());
+                changed = this.forEachChild(c => c.save(), false);
+                console.log('SECTION', this.getPath().join('.'), changed);
             } else {
                 if (this.unsavedValue != null) {
                     this.currentValue = this.unsavedValue;
                     delete this.unsavedValue;
                     changed = true;
                 }
+                console.log('  VALUE', this.getPath().join('.'), changed);
             }
             if (changed)
                 this.onChange.forEach(cb => cb(this.getValue()));
@@ -350,12 +379,12 @@ if (typeof UserscriptSettings === 'undefined') {
         const container = this.vars.node.createElement();
 
         // Check all connditions
-        this.vars.node.forEachChild(c => {
-            if (c.type === 'section') {
-            }
-            console.log('Looping', c.key);
-            c.onUnsavedChange.forEach(cb => cb(c.currentValue))
-        });
+        // this.vars.node.forEachChild(c => {
+        //     if (c.type === 'section') {
+        //     }
+        //     console.log('Looping', c.key);
+        //     c.onUnsavedChange.forEach(cb => cb(c.currentValue))
+        // });
 
         // Create button elements
         const btns = cr('nav');
@@ -439,6 +468,8 @@ if (typeof UserscriptSettings === 'undefined') {
         if (this.vars.node.save()) {
             this.hide(true);
             this.show();
+        } else {
+            console.log('Nothing to save!')
         }
     };
 }

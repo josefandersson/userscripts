@@ -11,10 +11,19 @@ A userscript's settings will only be shown on the settings panel if the userscri
 To start using the libarary:
 
 1. Add library to your userscript (`// @require      https://raw.githubusercontent.com/josefandersson/userscripts/master/userscript-settings/userscript-settings.js`).
-2. Create a settings object by calling `new UserscriptSettings(<descriptor>)`.
+2. Create a settings object by calling `new UserscriptSettings(descriptor*, savedValues)`.
 3. Implement a method for the user to open the settings panel. (Eg. using the `GM_registerMenuCommand` function along with the `/* your-settings-object */.show()` function.)
-4. Add callbacks for when the user changes settings with the `/* your-settings-object */.addOnChange(callback, path...)` function.
+4. Add callbacks for when the user changes settings with the `/* your-settings-object */.addOnChange(callback*, path...)` function.
 5. Store your userscript's settings however you want. (Eg. using the `GM_setValue` and `GM_getValue` functions.)
+
+Hard to understand? [Check out the example](https://github.com/josefandersson/userscripts/blob/master/userscript-settings/example-script.user.js).
+
+### new UserscriptSettings
+
+To add a section of settings you create a new `UserscriptSettings` object. It takes two arguments:
+
+- `descriptor` - See how the descriptor should be formatted in the next section.
+- `savedValues` - (Optional) Used to load saved settings from a previous session. The format is the same as what you get from `UserscriptSettings.getValues()`.
 
 ### Setting descriptor object
 
