@@ -10,69 +10,100 @@ A userscript's settings will only be shown on the settings panel if the userscri
 
 To start using the libarary:
 
-1. Make sure this library is required by your userscript.
-2. Create a settings object by calling `new UserscriptSettings(<Data object>)`.
-3. Implement a method for the user to open the settings panel. (It's recommended to use the `GM_registerMenuCommand` function along with the `/* your-settings-object */.show()` function.)
-4. Catch settings changes with the `/* your-settings-object */.addOnSave(callback, path...)` function.
-5. Store your userscript's settings however you want. (It's recommended to use the `GM_setValue` and `GM_getValue` functions.)
+1. Add library to your userscript (`// @require      https://raw.githubusercontent.com/josefandersson/userscripts/master/userscript-settings/userscript-settings.js`).
+2. Create a settings object by calling `new UserscriptSettings(<descriptor>)`.
+3. Implement a method for the user to open the settings panel. (Eg. using the `GM_registerMenuCommand` function along with the `/* your-settings-object */.show()` function.)
+4. Add callbacks for when the user changes settings with the `/* your-settings-object */.addOnChange(callback, path...)` function.
+5. Store your userscript's settings however you want. (Eg. using the `GM_setValue` and `GM_getValue` functions.)
 
-### Data object
+### Setting descriptor object
 
-When initializing the settings object you need to give it a data object. This object contains _all_ the settings you want to be available to the user and the current value of each setting.
-
-Example data object:
+The setting descriptor object, is a object where each key creates one node in the settings tree and where the value represents the title, type, value, etc. of the node. Nodes of type 'section' also contain a descriptor object in the value, thus creating child nodes (see 'appearance' in example).
+Example:
 
 ```json
 {
-    my_userscript: {
-        label: 'My Userscript',
-        settings: {
-            refresh: {
-                label: 'Autorefresh',
-                type: 'checkbox',
-                defaultValue: true,
-                currentValue: false
-            },
-            mode: {
-                label: 'Mode',
-                type: 'select',
-                options: ['Single', 'Multiple', 'Auto'],
-                defaultValue: 'Auto',
-                currentValue: 'Single'
-            },
-            appearance: {
-                label: 'Appearance',
-                settings: {
-                    useTheme: {
-                        label: 'Use theme',
-                        type: 'checkbox',
-                        defaultValue: true,
-                        currentValue: true
-                    },
-                    theme: {
-                        label: 'Theme',
-                        type: 'select',
-                        options: ['Zebra', 'Tomorrow', 'Autumn'],
-                        defaultValue: 'Zebra',
-                        currentValue: 'Tomorrow',
-                        requires: 'my_userscript.appearance.useTheme'
-                    }
-                }
-            }
+    "myUserscript": ["My Userscript", "section", {
+        "refresh": ["Autorefresh", "checkbox", true],
+        "mode": ["Mode", "select", ["Single", "Multiple", "Auto"], "Auto"],
+        "appearance": ["Appearance", "section", {
+            "useTheme": ["Use theme", "checkbox", true, false],
+            "theme": ["Theme", "select", ["Zebra", "Tomorrow", "Autumn"], 0, null, [["useTheme", true]]]
+        }]
+    }]
+}
+```
+
+Each value has to be an array were the two first values are setting title and setting type, in that order. The 3rd and following values are dependant on what the setting type is. These are all available types and available parameters:
+
+#### section
+
+Parameters: `[title*, type*, descriptor*, conditions]` (_\* is required_)
+Example: `["Theme settings", "section", {...}]`
+
+#### checkbox, text
+
+Parameters: `[title*, type*, default value, current value, conditions]` (_\* is required_)
+Example: `["Enable theme", "checkbox", true]`
+Example: `["Title", "text", "This is a title"]`
+
+#### number
+
+Parameters: `[title*, type*, default value, current value, min, max, step, conditions]` (_\* is required_)
+Example: `["Amount of eggs", "number", 12,, 1, 22]`
+
+#### select
+
+Parameters: `[title*, type*, options*, default value, current value, conditions]` (_\* is required_)
+Example: `["Change theme", "select", ["Zebra", "Tomorrow", "Autumn"], "Tomorrow", "Autumn"]`
+
+- `options` parameter is an array of strings.
+- `default value` and `current value` has to exists in `options`, be `null` or `undefined` or be a number `n` where `0 <= n < array_length` in which case the option at index `n` will be used as value (works for both default and current values).
+Example: `["Change theme", "select", ["Zebra", "Tomorrow", "Autumn"], 1, 2]`
+
+#### The conditions parameter
+
+The conditions parameter (available for all types) is used to enable/disable or show/hide setting node and it's children depending on specified conditions. For example one could want a select `Change theme` only to be changeable when a checkbox `Enable theme` is checked.
+
+It should be an array of condition objects with the following available keys:
+
+- _path_ - Path to the depending node. See more info about paths below.
+- _value_ - When the value of node at `path` changes to equal this value then this condition will trigger.
+- _action_ - What will happen when condition is triggerd. One of the following strings:
+  - `"disable"`
+  - `"hide"`
+- _invert_ - Invert condition to trigger when value of node at `path` changes to _not_ equal `value`.
+
+### Paths
+
+All settings (nodes) are placed in a node tree. Paths are used to navigate the tree.
+
+A path is one or multiple strings where each string is one node down the tree.
+
+If we use the following node tree as an example:
+
+```json
+{
+    "group1": {
+        "Adolf": 1,
+        "Edmund": 2,
+    },
+    "group2": {
+        "Joseph": {
+            "Helga": 3
         }
     }
 }
 ```
 
-| Key            | Purpose | Type |
-| :--            | :-- | :--: |
-| _label_        | The label for this setting. (Shown to the user.) | string |
-| _settings_     | Another data object with the child settings of this parent. Nodes with this variable will be seen as headers or sub headers. | object |
-| _type_         | This setting's type. Available: checkbox, text, number, select. These work as expected. | string |
-| _defaultValue_ | This setting's default value. When settings are reset or no value is known, this will be the value of this setting. | string\|number\|boolean |
-| _currentValue_ | This setting's current value. Usually you will load this with `GM_getValue` when your userscript is loaded. If not present, defaultValue will be used. | string\|number\|boolean |
-| _requires_     | If provided, this setting will only be shown if the value of the setting with the provided path is `true` or has a length greater than 0. | string |
-| _options_      | (For 'select' settings.) A list of the available values for this select. `defaultValue` and `currentValue` have to be in this list. | array\<string\> |
+...then these paths will yield these values:
+
+- `"group1", "Adolf"` -> `1`
+- `"group1", "Edmund"` -> `2`
+- `"group2", "Joseph"` -> `{Helga:3}`
+- `"group2", "Joseph", "Helga"` -> `3`
+
+This is useful when adding a onChange callback since you can specify a path to the node of which you want to add a listener to.
 
 ### IMPORTANT
 
