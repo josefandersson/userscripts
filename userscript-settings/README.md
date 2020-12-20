@@ -16,7 +16,7 @@ To start using the libarary:
 4. Add callbacks for when the user changes settings with the `/* your-settings-object */.addOnChange(callback*, path...)` function.
 5. Store your userscript's settings however you want. (Eg. using the `GM_setValue` and `GM_getValue` functions.)
 
-Hard to understand? [Check out the example](https://github.com/josefandersson/userscripts/blob/master/userscript-settings/example-script.user.js).
+_Hard to understand? [Check out the example](https://github.com/josefandersson/userscripts/blob/master/userscript-settings/example-script.user.js)._
 
 ### new UserscriptSettings
 
