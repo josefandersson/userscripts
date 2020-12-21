@@ -15,13 +15,16 @@ const oldSettings = GM_getValue('settings');
 
 // Create UserscriptSettings object on every page load. Pass settings descriptor and old settings.
 const settings = new UserscriptSettings({
-    "myUserscript": ["My Userscript", "section", {
-        "refresh": ["Autorefresh", "checkbox", true],
-        "mode": ["Mode", "select", ["Single", "Multiple", "Auto"]],
-        "appearance": ["Appearance", "section", {
-            "useTheme": ["Use theme", "checkbox", true],
-            "theme": ["Theme", "select", ["Autumn", "Tomorrow", "Zebra"], "Tomorrow", null, [{ "path":["useTheme"], "value":false, "action":"disable" }]]
-        }]
+    myUserscript: ["My Userscript", "section", {
+        refresh: ["Autorefresh", "checkbox", true],
+        mode: ["Mode", "select", ["Single", "Multiple", "Auto"]],
+        appearance: ["Appearance", "section", {
+            useTheme: ["Use theme", "checkbox", true],
+            colors: ["Colors", "multiple", ["Black", "Brown", "Green", "Orange", "Purple"], ["Brown", "Orange"], ["Purple"], [{ "path":["useTheme"], "value":false, "action":"disable" }]]
+        }],
+        hideDate: ["Hide before date", "date", "2020-05-23"],
+        highTime: ["Highlight after time", "time", "18:00", "20:30"],
+        replaceInfo: ["Info replacement message", "textarea",, "Lorem ipsum...", 5]
     }]
 }, { myUserscript:oldSettings }); // (it doesn't matter if oldSettings is null)
 
