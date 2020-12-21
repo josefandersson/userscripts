@@ -1,27 +1,30 @@
 // ==UserLibrary==
 // @name          Userscript Settings
 // @namespace     https://github.com/josefandersson/userscripts/tree/master/userscript-settings
-// @version       2.3
+// @version       2.4
 // @description   Library for adding a settings popup to userscripts.
 // @author        Josef Andersson
 // ==/UserLibrary==
 
-// TODO:  - Finish the import feature.
-//        - Implement the 'requires' feature.
-//        - Add types: date, range, textarea, radio.
+// TODO:  - Import and export feature (node.getValue and node.applyValues could be used).
+//        - Warn when there are unsaves settings and user is trying to close the popup.
+//        - Disable save button when there are no unsaved values.
+//        - Complete the 'disable' input feature, propegate to children.
+//        - Limits to numbers, dates, etc. and regex for text, enforce limits.
+//        - Hover (exclaimation mark icon?) for a description of setting or section.
+//        - UserscriptSettings.addOnChange() without path could use this.settings to add listeners to only sections added by this instance.
 
 if (typeof UserscriptSettings === 'undefined') {
     const cr = (tagName, obj) => Object.assign(document.createElement(tagName), obj || {});
 
     /**
-     * Global settings class. Used to make instances for each application. Used to
-     * create popup and handle showing and closing settings window. Used to get set
-     * values.
+     * Global settings class. Create one instance per userscript. Used to
+     * create popup and handle showing and closing settings window, and to
+     * get/set values.
      */
     UserscriptSettings = function UserscriptSettings(settings, savedValues=null) {
         this.settings = settings;
 
-        Object.assign(this.constructor.vars.settings, settings);
         this.constructor.vars.node.applySettings(settings);
         this.constructor.vars.node.applyValues(savedValues);
         this.constructor.vars.node.setupConditions();
@@ -155,23 +158,37 @@ if (typeof UserscriptSettings === 'undefined') {
             } else {
                 element.appendChild(cr('label', { innerText:this.title, htmlFor:thisPath }));
                 let input, key;
-                switch (this.type) {
-                    case "checkbox":
-                        input = cr('input', { id:thisPath, type:'checkbox', checked:this.currentValue });
-                        key = 'checked'; break;
-                    case "text":
-                        input = cr('input', { id:thisPath, type:'text', value:this.currentValue });
-                        key = 'value'; break;
-                    case "number":
-                        input = cr('input', { id:thisPath, type:'number', value:this.currentValue, min:this.min, max:this.max, step:this.step });
-                        key = 'valueAsNumber'; break;
-                    case "select":
-                        input = cr('select', { id:thisPath });
-                        this.options.forEach(value => 
-                            input.appendChild(cr('option', { value, innerText:value, selected:this.currentValue === value })));
-                        key = 'value'; break;
+                if (this.type === 'multiple') {
+                    input = cr('select', { id:thisPath, multiple:true });
+                    const opts = this.options.map(value => 
+                        input.appendChild(cr('option', { value, innerText:value, selected:-1<this.currentValue.indexOf(value) })));
+                    input.addEventListener('change', () =>
+                        input.classList[this.setUnsavedValue(opts.filter(o =>
+                            o.selected).map(o => o.value)) ? 'add' : 'remove']('hasUnsaved'));
+                } else {
+                    switch (this.type) {
+                        case "checkbox":
+                            input = cr('input', { id:thisPath, type:'checkbox', checked:this.currentValue });
+                            key = 'checked'; break;
+                        case "text":
+                        case "time":
+                        case "date":
+                            input = cr('input', { id:thisPath, type:this.type, value:this.currentValue });
+                            key = 'value'; break;
+                        case "textarea":
+                            input = cr('textarea', { id:thisPath, value:this.currentValue, rows:this.numRows, cols:this.numCols });
+                            key = 'value'; break;
+                        case "number":
+                            input = cr('input', { id:thisPath, type:'number', value:this.currentValue, min:this.min, max:this.max, step:this.step });
+                            key = 'valueAsNumber'; break;
+                        case "select":
+                            input = cr('select', { id:thisPath });
+                            this.options.forEach(value => 
+                                input.appendChild(cr('option', { value, innerText:value, selected:this.currentValue === value })));
+                            key = 'value'; break;
+                    }
+                    input.addEventListener('change', () => input.classList[this.setUnsavedValue(input[key]) ? 'add' : 'remove']('hasUnsaved'));
                 }
-                input.addEventListener('change', () => input.classList[this.setUnsavedValue(input[key]) ? 'add' : 'remove']('hasUnsaved'));
                 element.appendChild(input);
             }
             this.element = element; // TODO: Delete this.element when popup closes
@@ -252,14 +269,12 @@ if (typeof UserscriptSettings === 'undefined') {
             let changed = false;
             if (this.type === 'section') {
                 changed = this.forEachChild(c => c.save(), false);
-                console.log('SECTION', this.getPath().join('.'), changed);
             } else {
                 if (this.unsavedValue != null) {
                     this.currentValue = this.unsavedValue;
                     delete this.unsavedValue;
                     changed = true;
                 }
-                console.log('  VALUE', this.getPath().join('.'), changed);
             }
             if (changed)
                 this.onChange.forEach(cb => cb(this.getValue()));
@@ -297,9 +312,17 @@ if (typeof UserscriptSettings === 'undefined') {
                     this.currentValue = descriptor[3] != null ? descriptor[3] : this.defaultValue;
                     coni = 4; break;
                 case 'text':
+                case 'time':
+                case 'date':
                     this.defaultValue = descriptor[2] || '';
                     this.currentValue = descriptor[3] || this.defaultValue;
                     coni = 4; break;
+                case 'textarea':
+                    this.defaultValue = descriptor[2] || '';
+                    this.currentValue = descriptor[3] || this.defaultValue;
+                    this.numRows = descriptor[4];
+                    this.numCols = descriptor[5];
+                    coni = 6; break;
                 case 'number':
                     this.defaultValue = descriptor[2] != null ? descriptor[2] : 0;
                     this.currentValue = descriptor[3] != null ? descriptor[3] : this.defaultValue;
@@ -312,7 +335,12 @@ if (typeof UserscriptSettings === 'undefined') {
                     this.defaultValue = descriptor[3] || this.options[0];
                     this.currentValue = descriptor[4] || this.defaultValue;
                     coni = 5; break;
-                default: throw new Error("Unknown setting type");
+                case 'multiple':
+                    this.options = descriptor[2];
+                    this.defaultValue = descriptor[3] || [this.options[0]];
+                    this.currentValue = descriptor[4] || this.defaultValue;
+                    coni = 5; break;
+                default: throw new Error('Unknown setting type ' + descriptor[1]);
             }
 
             if (descriptor[coni])
@@ -327,8 +355,6 @@ if (typeof UserscriptSettings === 'undefined') {
         element: null,
         injected: false,
         node: new UserscriptSettings.Node(),
-        saveCallbacks: {},
-        settings: {}, // raw, not used
     };
 
     /**

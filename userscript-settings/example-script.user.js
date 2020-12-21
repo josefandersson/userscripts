@@ -20,7 +20,7 @@ const settings = new UserscriptSettings({
         "mode": ["Mode", "select", ["Single", "Multiple", "Auto"]],
         "appearance": ["Appearance", "section", {
             "useTheme": ["Use theme", "checkbox", true],
-            "theme": ["Theme", "select", ["Zebra", "Tomorrow", "Autumn"], 0, null, [{ "path":["useTheme"], "value":false, "action":"disable" }]]
+            "theme": ["Theme", "select", ["Autumn", "Tomorrow", "Zebra"], "Tomorrow", null, [{ "path":["useTheme"], "value":false, "action":"disable" }]]
         }]
     }]
 }, { myUserscript:oldSettings }); // (it doesn't matter if oldSettings is null)

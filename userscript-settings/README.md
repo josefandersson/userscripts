@@ -50,25 +50,38 @@ Each value has to be an array were the two first values are setting title and se
 Parameters: `[title*, type*, descriptor*, conditions]` (_\* is required_)
 Example: `["Theme settings", "section", {...}]`
 
-#### checkbox, text
+#### checkbox, text, time, date
 
 Parameters: `[title*, type*, default value, current value, conditions]` (_\* is required_)
 Example: `["Enable theme", "checkbox", true]`
 Example: `["Title", "text", "This is a title"]`
+Example: `["Hide before date", "date", "2020-05-23"]`
+Example: `["Highlight after time", "time", "18:00", "20:30"]`
+
+- `checkbox` values are booleans.
+- `text` values are any string.
+- `time` values are strings in format `HH:mm:ss`.
+- `date` values are strings in format `yyyy-MM-dd`.
 
 #### number
 
 Parameters: `[title*, type*, default value, current value, min, max, step, conditions]` (_\* is required_)
 Example: `["Amount of eggs", "number", 12,, 1, 22]`
 
-#### select
+#### textarea
+
+Parameters: `[title*, type*, default value, current value, numRows, numCols, conditions]` (_\* is required_)
+Example: `["Info message", "textarea",, "Lorem ipsum...", 5]`
+
+#### select, multiple
 
 Parameters: `[title*, type*, options*, default value, current value, conditions]` (_\* is required_)
 Example: `["Change theme", "select", ["Zebra", "Tomorrow", "Autumn"], "Tomorrow", "Autumn"]`
+Example: `["Favorite animals", "multiple", ["Cow", "Donkey", "Zebra", "Rat"], ["Donkey", "Rat"], ["Cow"]]`
 
-- `options` parameter is an array of strings.
-- `default value` and `current value` has to exists in `options`, be `null` or `undefined` or be a number `n` where `0 <= n < array_length` in which case the option at index `n` will be used as value (works for both default and current values).
-Example: `["Change theme", "select", ["Zebra", "Tomorrow", "Autumn"], 1, 2]`
+- `options` parameter is an array of strings with all selectable options.
+- `select` values has to exists in `options` or be `null` or `undefined`.
+- `multiple` values has to be arrays of strings (or empty) and all strings have to exist in `options`.
 
 #### The conditions parameter
 
