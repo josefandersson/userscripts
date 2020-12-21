@@ -91,10 +91,11 @@ It should be an array of condition objects with the following available keys:
 
 - _path_ - Path to the depending node. See more info about paths below.
 - _value_ - When the value of node at `path` changes to equal this value then this condition will trigger.
+- _eval_ - Function that will be called when node changes, passed the new value, and if returns `true` will trigger the condition.
 - _action_ - What will happen when condition is triggerd. One of the following strings:
   - `"disable"`
   - `"hide"`
-- _invert_ - Invert condition to trigger when value of node at `path` changes to _not_ equal `value`.
+- _invert_ - Invert condition to trigger when value of node at `path` changes to _not_ equal `value` or when `eval` does not return `true`.
 
 ### Paths
 

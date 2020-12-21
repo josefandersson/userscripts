@@ -7,12 +7,14 @@
 // ==/UserLibrary==
 
 // TODO:  - Import and export feature (node.getValue and node.applyValues could be used).
+//        - For conditions, add an 'eval' param where one can set a function to run the evaluation instead of just comparing the value.
 //        - Warn when there are unsaves settings and user is trying to close the popup.
 //        - Disable save button when there are no unsaved values.
 //        - Complete the 'disable' input feature, propegate to children.
 //        - Limits to numbers, dates, etc. and regex for text, enforce limits.
 //        - Hover (exclaimation mark icon?) for a description of setting or section.
 //        - UserscriptSettings.addOnChange() without path could use this.settings to add listeners to only sections added by this instance.
+//        - Conditions are not properly updated when popup opens. (see colors and randomize colors in example)
 
 if (typeof UserscriptSettings === 'undefined') {
     const cr = (tagName, obj) => Object.assign(document.createElement(tagName), obj || {});
@@ -122,8 +124,13 @@ if (typeof UserscriptSettings === 'undefined') {
                 this.conditions.forEach(con => {
                     const ref = this.parent.find(...con.path);
                     ref.addOnUnsavedChange(newVal => {
-                        console.log('addOnUnsavedChange', newVal, con.value, con.invert);
-                        if ((newVal === con.value) !== !!con.invert) {
+                        let triggered = false;
+                        if (con.eval) {
+                            triggered = con.eval(newVal);
+                        } else {
+                            triggered = newVal === con.value;
+                        }
+                        if (triggered !== !!con.invert) {
                             if (con.action === 'disable') {
                                 this.element.disabled = true;
                                 this.element.classList.add('disabledAction');
