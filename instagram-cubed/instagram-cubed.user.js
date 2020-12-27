@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Instagram²
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/instagram-cubed
-// @version      1.2
+// @version      1.3
 // @description  Adds some QoL features to Instagram.
 //               - Deobfuscates videos and images making them easier to save.
 //               - Maximizes image quality.
@@ -129,8 +129,11 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
          * @returns {String} Video src
          */
         getVideoSrc(element) {
-            if (element.tagName === 'VIDEO')
+            if (element.tagName === 'VIDEO') {
+                if (!element.src)
+                    element = element.querySelector('source');
                 return element.src;
+            }
             return null;
         }
 
@@ -189,6 +192,7 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
             if (element.tagName !== 'IMG')
                 return;
             element.sizes = '';
+            return element;
         }
 
         /**
@@ -605,6 +609,17 @@ const UPDATE_INTERVAL_MS = 100; // Time (in ms) between looking for page updates
      * Stories page: /stories/<username>/<story_id>/.
      */
     class StoriesPage extends Page {
+        // OVERRIDE
+        getImageSrc(element) {
+            if (element.tagName === 'IMG') {
+                return this.makeMaxQuality(element).src;
+            } else if (element.tagName === 'VIDEO') {
+                return this.makeMaxQuality(element.previousElementSibling).currentSrc;
+            }
+            return null;
+        }
+
+
         // OVERRIDE
         static isCurrentPage() {
             return location.pathname.startsWith('/stories/');
