@@ -15,6 +15,9 @@
 //        - Hover (exclaimation mark icon?) for a description of setting or section.
 //        - UserscriptSettings.addOnChange() without path could use this.settings to add listeners to only sections added by this instance.
 //        - Conditions are not properly updated when popup opens. (see colors and randomize colors in example)
+//        - For 'multiple', a default or current value of string "all" selects all options.
+//        - Wider popup, put labels left of input - right now it looks to spread out/chaotic.
+//        - For add change callbacks, add options to only get the changed settings when this node is a section, ie only pop children with changed values.
 
 if (typeof UserscriptSettings === 'undefined') {
     const cr = (tagName, obj) => Object.assign(document.createElement(tagName), obj || {});
