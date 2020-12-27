@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.38
+// @version      1.39
 // @description  Adds some extra features to YouTube
-// @author       DrDoof
+// @author       Josef Andersson
 // @match        https://www.youtube.com/*
 // @icon         https://youtube.com/favicon.ico
 // @require      https://raw.githubusercontent.com/josefandersson/userscripts/master/userscript-settings/userscript-settings.js
@@ -18,6 +18,7 @@
 //          still add the video to history if tab is opened for more than 10 seconds
 // TODO:  - Playlists: reverse, shuffle
 //        - (opt-in to) Remember video titles and uploader so that we can fill the void when videos are removed
+//        - Smart speed module that analyzes the sound to vastly speed up the clip when no one is talking/no sound
 //        - Disable autoplaying 'channel trailer' video on channel page
 //        - Minimize player when scrolling down
 //        - Timestamp marker with notes, popup list to jump to timestamp on video
@@ -25,6 +26,7 @@
 //        - Rewrite history module, if video is replayed without reloaded add extra plays to history, also save video title and uploader name,
 //          use video progression every second to check playtime instead of real life time since the video can be speed up/down
 //        - Add a video object that handles onChange instead of modules individually, along with other cross-module related functions and vars
+//        - Let each module itself add nodes to settings before creating UserscriptSettings instance
 
 const ENABLED_MODULES = ['mProgress', 'mPlaybackRate', 'mOpenThumbnail', 'mScreenshot', 'mGoToTimestamp', 'mHistory', 'mTrim', 'mCopy'];
 
@@ -38,102 +40,35 @@ const MIN_PERCENTAGE_BEFORE_SEEN = .8;
 // =============
 // User settings
 // =============
-const currentValues = GM_getValue('settings', { keyPressRate:0, playbackRateStep:.05, mProgressEnabled:true, mPlaybackRate:true, mOpenThumbnail:true, mScreenshot:true, mGoToTimestamp:true, mHistory:true });
 const settings = new UserscriptSettings({
-    youtubeSlightlyBetter: {
-        label: 'YouTube Slightly Better',
-        settings: {
-            keyPressRate: {
-                label: 'Key press rate (0 for system default)',
-                type: 'number',
-                defaultValue: 0,
-                currentValue: currentValues.keyPressRate
-            },
-            playbackRateStep: {
-                label: 'Playback rate step',
-                type: 'number',
-                defaultValue: 0.05,
-                currentValue: currentValues.playbackRateStep
-            },
-            modules: {
-                label: 'Modules',
-                settings: {
-                    mProgress: {
-                        label: 'Progress',
-                        settings: {
-                            enabled: {
-                                label: 'Enabled',
-                                type: 'checkbox',
-                                defaultValue: true,
-                                currentValue: currentValues.mProgressEnabled
-                            }
-                        }
-                    },
-                    mPlaybackRate: {
-                        label: 'Playback Rate',
-                        settings: {
-                            enabled: {
-                                label: 'Enabled',
-                                type: 'checkbox',
-                                defaultValue: true,
-                                currentValue: currentValues.mPlaybackRate
-                            }
-                        }
-                    },
-                    mOpenThumbnail: {
-                        label: 'Open Thumbnail',
-                        settings: {
-                            enabled: {
-                                label: 'Enabled',
-                                type: 'checkbox',
-                                defaultValue: true,
-                                currentValue: currentValues.mOpenThumbnail
-                            }
-                        }
-                    },
-                    mScreenshot: {
-                        label: 'Screenshot',
-                        settings: {
-                            enabled: {
-                                label: 'Enabled',
-                                type: 'checkbox',
-                                defaultValue: true,
-                                currentValue: currentValues.mScreenshot
-                            }
-                        }
-                    },
-                    mGoToTimestamp: {
-                        label: 'Go To Timestamp',
-                        settings: {
-                            enabled: {
-                                label: 'Enabled',
-                                type: 'checkbox',
-                                defaultValue: true,
-                                currentValue: currentValues.mGoToTimestamp
-                            }
-                        }
-                    },
-                    mHistory: {
-                        label: 'History',
-                        settings: {
-                            enabled: {
-                                label: 'Enabled',
-                                type: 'checkbox',
-                                defaultValue: true,
-                                currentValue: currentValues.mHistory
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-});
+    ytsb: ['YouTube Slightly Better', 'section', {
+        keyPressRate: ['Key press rate (0 for system default)', 'number', 0],
+        enabledModules: ['Enabled modules', 'multiple',
+            ['Copy', 'Go To Timestamp', 'History', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim'],
+            ['Copy', 'Go To Timestamp', 'History', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim']],
+        modules: ['Module settings', 'section', {
+            mPlaybackRate: ['Playback Rate', 'section', {
+                playbackRateStep: ['Playback rate step', 'number', 0.05],
+                minPlaybackRate: ['Minimum playback rate', 'number', 0.1],
+                maxPlaybackRate: ['Maximum playback rate', 'number', 3],
+            }, [{ path:['/', 'ytsb', 'enabledModules'], eval:v=>-1<v.indexOf('Playback Rate'), action:'hide' }]]
+        }],
+        modules: ['Keybinds', 'section', {
+            mCopy: ['Copy', 'text', 'v'],
+            mGoToTimestamp: ['Go To Timestamp', 'text', 'v'],
+            mHistory: ['History', 'text', 'v'],
+            mOpenThumbnail: ['Open Thumbnail', 'text', 'v'],
+            mPlaybackRate: ['Playback Rate', 'text', 'v'],
+            mProgress: ['Progress', 'text', 'v'],
+            mScreenshot: ['Screenshot', 'text', 'v'],
+            mTrim: ['Trim', 'text', 'v']
+        }]
+    }]
+}, { ytsb:GM_getValue('settings') });
 
-settings.addOnSave(() => {
-    const data = settings.getValues('youtubeSlightlyBetter');
-    console.log('Saved:', data);
-}, 'youtubeSlightlyBetter');
+settings.addOnChange(vals => {
+    GM_setValue('settings', vals);
+}, 'ytsb');
 
 
 
@@ -724,6 +659,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             navigator.clipboard.writeText(`https://youtu.be/${vid}?t=${time}`);
         }
     }
+
 
 
     // ==========
