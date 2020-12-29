@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.39
+// @version      1.40
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -28,7 +28,7 @@
 //        - Add a video object that handles onChange instead of modules individually, along with other cross-module related functions and vars
 //        - Let each module itself add nodes to settings before creating UserscriptSettings instance
 
-const ENABLED_MODULES = ['mProgress', 'mPlaybackRate', 'mOpenThumbnail', 'mScreenshot', 'mGoToTimestamp', 'mHistory', 'mTrim', 'mCopy'];
+const ENABLED_MODULES = ['mProgress', 'mPlaybackRate', 'mOpenThumbnail', 'mScreenshot', 'mGoToTimestamp', 'mHistory', 'mTrim', 'mCopy', 'mMediaSession'];
 
 const MIN_PLAYBACK_RATE = .1;
 const MAX_PLAYBACK_RATE = 3;
@@ -657,6 +657,55 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
                 return (nv < 10 ? `0${nv}` : nv) + unitNms[units.length-1-i];
             }).join('');
             navigator.clipboard.writeText(`https://youtu.be/${vid}?t=${time}`);
+        }
+    }
+
+
+
+    // ====================
+    // Media Session Module
+    // ====================
+    //
+    // - Make media keys (next, previous) work in browsers where they don't
+    //
+    mModule.mMediaSession = class mMediaSession extends mModule {
+        constructor() {
+            super();
+            let data = '';
+            setInterval(() => {
+                // document.title = 'State: ' + navigator.mediaSession.playbackState + ' ' + data;
+            }, 200);
+            if (!video.paused) {
+                video.pause();
+                video.play();
+            }
+            video.addEventListener('play', () => data += 'PLAY'); // TODO: If window was just created then pause the video, then play video when window gains focus
+            video.addEventListener('pause', () => data += 'PAUS');
+            video.addEventListener('loadeddata', ev => setTimeout(() => {
+                this.onChange(ev);
+            }, 200)); // TODO: Should it be 200ms?
+            video.addEventListener('ended', () => navigator.mediaSession.playbackState = 'paused');
+            this.onChange();
+        }
+        onChange() {
+            navigator.mediaSession.setActionHandler('play', ev => this.onMedia(ev));
+            navigator.mediaSession.setActionHandler('pause', ev => this.onMedia(ev));
+            navigator.mediaSession.setActionHandler('stop', ev => this.onMedia(ev));
+            navigator.mediaSession.setActionHandler('previoustrack', ev => this.onMedia(ev));
+            navigator.mediaSession.setActionHandler('nexttrack', ev => this.onMedia(ev));
+            navigator.mediaSession.setActionHandler('seekbackward', ev => this.onMedia(ev));
+            navigator.mediaSession.setActionHandler('seekforward', ev => this.onMedia(ev));
+            navigator.mediaSession.setActionHandler('seekto', ev => this.onMedia(ev));
+        }
+        onMedia(ev) {
+            console.log(ev);
+            switch (ev.action) {
+                case 'stop':
+                case 'play': video.play(); break;
+                case 'pause': video.pause(); break;
+                case 'nexttrack': document.querySelector('.ytp-next-button').click(); break;
+                case 'previoustrack': document.querySelector('.ytp-prev-button').click(); break;
+            }
         }
     }
 
