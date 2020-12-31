@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.40
+// @version      1.41
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -267,15 +267,18 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
         goToTimestamp(str) {
             let t = [];
             if (/^[0-5]?[0-9]$/.test(str)) { // 20,30,35 (implied minutes)
-                t[1] = str;
-            } else if (/^[0-9]+[hms]$/.test(str)) { // 19h,20m,21s (specified unit)
-                t[['s','m','h'].indexOf(str[str.length-1])] = str.substr(0, str.length-1);
+                t[1] = +str;
+            } else if (/^([0-9]+[hms])+$/.test(str)) { // 19h,20m,21s,20m21s (specified unit or units)
+                let regex = /([0-9]+)([hms])/g, res;
+                while ((res = regex.exec(str)) != null)
+                    t[['s','m','h'].indexOf(res[2])] = +res[1];
             } else if (/^[0-5]?[0-9][: ]$/.test(str)) { // 07:,1: (implied hours)
-                t[2] = str.substr(0, str.length-1);
+                t[2] = +str.substr(0, str.length-1);
             } else { // 01:02:03,02:03,03 (normal)
                 t = str.split(/[: ]/).reverse().map(n => +n);
             }
             const s = (t[0]||0) + (t[1]||0) * 60 + (t[2]||0) * 3600;
+            console.log(s);
             if (s < video.duration)
                 video.currentTime = s;
         }
@@ -283,10 +286,14 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             if (this.prompt) return this.closePrompt();
             this.prompt = cr('div', { className:'ytbc-p' });
             const input = cr('input', { type:'text', autofill:'off', size:1 });
+            // https://youtu.be/bw3UygAi2oo?t=08m29s
             const allowedTimestamp = /^([0-5]?[0-9](([: ][0-5]?[0-9]){0,2}|[hms: ]))|([: ][0-5]?[0-9])$/;
             const badCharacters = /[^0-9: hms]/g;
             input.addEventListener('input', ev => {
-                if (ev.data && badCharacters.test(ev.data))
+                let r;
+                if (ev.inputType === 'insertFromPaste' && (r = /^https:\/\/(?:youtu\.be\/|www\.youtube\.com\/watch\?v=)[a-zA-Z0-9]*[?&]t=([^&]*)/.exec(input.value))) {
+                    input.value = r[1];
+                } else if (ev.inputType === 'insertText' && badCharacters.test(input.value))
                     input.value = input.value.replace(badCharacters, '');
                 input.setAttribute('size', input.value.length || 1);
                 if (allowedTimestamp.test(input.value)) {
