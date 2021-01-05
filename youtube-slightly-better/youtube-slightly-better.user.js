@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.41
+// @version      1.42
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -28,32 +28,28 @@
 //        - Add a video object that handles onChange instead of modules individually, along with other cross-module related functions and vars
 //        - Let each module itself add nodes to settings before creating UserscriptSettings instance
 
-const ENABLED_MODULES = ['mProgress', 'mPlaybackRate', 'mOpenThumbnail', 'mScreenshot', 'mGoToTimestamp', 'mHistory', 'mTrim', 'mCopy', 'mMediaSession'];
-
-const MIN_PLAYBACK_RATE = .1;
-const MAX_PLAYBACK_RATE = 3;
-const PLAYBACK_STEP = .05;
-const MIN_PERCENTAGE_BEFORE_SEEN = .8;
-
-
 
 // =============
 // User settings
 // =============
-const settings = new UserscriptSettings({
+let settings;
+const sObj = new UserscriptSettings({
     ytsb: ['YouTube Slightly Better', 'section', {
         keyPressRate: ['Key press rate (0 for system default)', 'number', 0],
         enabledModules: ['Enabled modules', 'multiple',
-            ['Copy', 'Go To Timestamp', 'History', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim'],
-            ['Copy', 'Go To Timestamp', 'History', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim']],
+            ['Copy', 'Go To Timestamp', 'History', 'Media Session', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim'],
+            ['Copy', 'Go To Timestamp', 'History', 'Media Session', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim']],
         modules: ['Module settings', 'section', {
             mPlaybackRate: ['Playback Rate', 'section', {
                 playbackRateStep: ['Playback rate step', 'number', 0.05],
                 minPlaybackRate: ['Minimum playback rate', 'number', 0.1],
                 maxPlaybackRate: ['Maximum playback rate', 'number', 3],
+            }, [{ path:['/', 'ytsb', 'enabledModules'], eval:v=>-1<v.indexOf('Playback Rate'), action:'hide' }]],
+            mHistory: ['History', 'section', {
+                minPercentageBeforeSeen: ['Minimum percentage before counted as seen', 'number', .8,, 0, 1, .05],
             }, [{ path:['/', 'ytsb', 'enabledModules'], eval:v=>-1<v.indexOf('Playback Rate'), action:'hide' }]]
         }],
-        modules: ['Keybinds', 'section', {
+        keybinds: ['Keybinds', 'section', {
             mCopy: ['Copy', 'text', 'v'],
             mGoToTimestamp: ['Go To Timestamp', 'text', 'v'],
             mHistory: ['History', 'text', 'v'],
@@ -66,10 +62,12 @@ const settings = new UserscriptSettings({
     }]
 }, { ytsb:GM_getValue('settings') });
 
-settings.addOnChange(vals => {
-    GM_setValue('settings', vals);
+sObj.addOnChange(vals => {
+    GM_setValue('settings', settings = vals);
 }, 'ytsb');
 
+// Get current settings, including default values
+settings = Object.assign({}, UserscriptSettings.getValues('ytsb'));
 
 
 // ===============
@@ -87,7 +85,7 @@ document.addEventListener('keypress', ev => keyEvent(ev, 'keypress'));
 document.addEventListener('keyup', ev => keyEvent(ev, 'keyup'));
 document.addEventListener('keydown', ev => keyEvent(ev, 'keydown'));
 
-GM_registerMenuCommand('Settings', settings.show, 's');
+GM_registerMenuCommand('Settings', sObj.show, 's');
 
 
 
@@ -145,26 +143,26 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             this.slower = this.addItem(new mItemBtnHold(this, 'S', 'Derease playback rate\nKeybinding: a'));
             this.speed = this.addItem(new mItemBtn(this, this.getPlaybackRateStr(), 'Reset playback rate\nKeybinding: s'));
             this.faster = this.addItem(new mItemBtnHold(this, 'F', 'Increase playback rate\nKeybinding: d'));
-            this.slower.addOnClick(() => this.changePlaybackRate(-currentValues.playbackRateStep));
+            this.slower.addOnClick(() => this.changePlaybackRate(-settings.modules.mPlaybackRate.playbackRateStep));
             this.speed.addOnClick(() => {
                 if (!this.setPlaybackRate(1))
                     this.clearDown();
             });
-            this.faster.addOnClick(() => this.changePlaybackRate(currentValues.playbackRateStep));
+            this.faster.addOnClick(() => this.changePlaybackRate(settings.modules.mPlaybackRate.playbackRateStep));
             this.registerKeys(['a', 's', 'd']);
         }
         getPlaybackRateStr() { return video.playbackRate.toFixed(2) + ''; }
         changePlaybackRate(diff) { return this.setPlaybackRate(video.playbackRate + diff); }
         setPlaybackRate(rate) {
-            video.playbackRate = Math.max(MIN_PLAYBACK_RATE, Math.min(MAX_PLAYBACK_RATE, rate));
+            video.playbackRate = Math.max(settings.modules.mPlaybackRate.minPlaybackRate, Math.min(settings.modules.mPlaybackRate.maxPlaybackRate, rate));
             this.speed.element.innerText = this.getPlaybackRateStr();
             return video.playbackRate === rate;
         }
         onKey(ev) {
             super.onKey(ev);
-            if (ev.key === 'a') this.changePlaybackRate(-PLAYBACK_STEP);
+            if (ev.key === 'a') this.changePlaybackRate(-settings.modules.mPlaybackRate.playbackRateStep);
             else if (ev.key === 's') this.setPlaybackRate(1);
-            else if (ev.key === 'd') this.changePlaybackRate(PLAYBACK_STEP);
+            else if (ev.key === 'd') this.changePlaybackRate(settings.modules.mPlaybackRate.playbackRateStep);
         }
     }
 
@@ -286,7 +284,6 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             if (this.prompt) return this.closePrompt();
             this.prompt = cr('div', { className:'ytbc-p' });
             const input = cr('input', { type:'text', autofill:'off', size:1 });
-            // https://youtu.be/bw3UygAi2oo?t=08m29s
             const allowedTimestamp = /^([0-5]?[0-9](([: ][0-5]?[0-9]){0,2}|[hms: ]))|([: ][0-5]?[0-9])$/;
             const badCharacters = /[^0-9: hms]/g;
             input.addEventListener('input', ev => {
@@ -358,7 +355,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
                     this.seen.element.innerText = '0';
                     this.seen.element.style.color = 'inherit';
                 }
-                this.minimumTime = MIN_PERCENTAGE_BEFORE_SEEN * video.duration * 1000;
+                this.minimumTime = settings.modules.mHistory.minPercentageBeforeSeen * video.duration * 1000;
                 this.onPause();
                 this.currentPlaytime = 0;
                 if (!video.paused)
@@ -819,7 +816,17 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     function init() {
         container = cr('div', { className:'ytbc' });
 
-        modules = ENABLED_MODULES.map(name => new mModule[name]());
+        const REF = {
+            'Progress': 'mProgress',
+            'Playback Rate':'mPlaybackRate',
+            'Open Thumbnail':'mOpenThumbnail',
+            'Screenshot':'mScreenshot',
+            'Go To Timestamp':'mGoToTimestamp',
+            'History':'mHistory',
+            'Trim':'mTrim',
+            'Copy':'mCopy',
+            'Media Session':'mMediaSession' };
+        modules = settings.enabledModules.map(name => new mModule[REF[name]]());
 
         title.parentElement.insertBefore(container, title);
     }
