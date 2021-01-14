@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.42
+// @version      1.43
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -21,8 +21,6 @@
 //        - Smart speed module that analyzes the sound to vastly speed up the clip when no one is talking/no sound
 //        - Disable autoplaying 'channel trailer' video on channel page
 //        - Minimize player when scrolling down
-//        - Timestamp marker with notes, popup list to jump to timestamp on video
-//        - Paste feature to paste timestamp or link with timestamp, then jump to it instead of having to reload page
 //        - Rewrite history module, if video is replayed without reloaded add extra plays to history, also save video title and uploader name,
 //          use video progression every second to check playtime instead of real life time since the video can be speed up/down
 //        - Add a video object that handles onChange instead of modules individually, along with other cross-module related functions and vars
@@ -37,8 +35,8 @@ const sObj = new UserscriptSettings({
     ytsb: ['YouTube Slightly Better', 'section', {
         keyPressRate: ['Key press rate (0 for system default)', 'number', 0],
         enabledModules: ['Enabled modules', 'multiple',
-            ['Copy', 'Go To Timestamp', 'History', 'Media Session', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim'],
-            ['Copy', 'Go To Timestamp', 'History', 'Media Session', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim']],
+            ['Copy', 'Go To Timestamp', 'History', 'Media Session', 'Notes', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim'],
+            ['Copy', 'Go To Timestamp', 'History', 'Media Session', 'Notes', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim']],
         modules: ['Module settings', 'section', {
             mPlaybackRate: ['Playback Rate', 'section', {
                 playbackRateStep: ['Playback rate step', 'number', 0.05],
@@ -93,7 +91,7 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
 // Helper Functions
 // ================
 const cr = (type, obj) => Object.assign(document.createElement(type), obj || {});
-
+const q = (sel) => document.querySelector(sel);
 
 
 (() => {
@@ -487,6 +485,7 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
     // - With multiple trims, it will skip video between trims
     // - One trim fully within another trim will untrim (skip) that part of the parent trim
     // - When trims overlap but aren't fully within, the trims will add together
+    // - TODO: Use video speed in calculating next trim, also recalc when video speed changes
     //
     mModule.mTrim = class mTrim extends mModule {
         constructor() {
@@ -708,8 +707,148 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
                 case 'play': video.play(); break;
                 case 'pause': video.pause(); break;
                 case 'nexttrack': document.querySelector('.ytp-next-button').click(); break;
-                case 'previoustrack': document.querySelector('.ytp-prev-button').click(); break;
+                case 'previoustrack':
+                    let prev = document.querySelector('.ytp-prev-button');
+                    if (prev) prev.click();
+                    else      video.currentTime = 0;
+                    break;
             }
+        }
+    }
+
+
+
+
+    // =====
+    // Notes
+    // =====
+    //
+    // - Add note(s) to be associated with timestamps
+    // - Popup list to jump to note's timestamp
+    // TODO: Make time text in popup editable (input) so that one can move the note to another timestamp
+    // TODO: Put popup inside of the notesBar so that it keeps the vertical position when video is resized (ie not static pixel y pos)
+    // TODO: Make compatible with normal viewing mode (not thetre), specifically don't use #player-theater-container as parent
+    // TODO: Make note text show somewhere when within x seconds of timestamp
+    // TODO: Make a custom popup window for displaying the text instead of builtin titles
+    //
+    mModule.mNotes = class mTrim extends mModule {
+        constructor() {
+            super();
+            this.note = this.addItem(new mItemBtn(this, 'N', 'Note'));
+            this.note.addOnClick(() => this.handleOnClick());
+            this.registerKeys(['n']);
+            video.addEventListener('loadeddata', ev => this.onChange(ev));
+            video.addEventListener('timeupdate', ev => this.onTimeUpdate(ev));
+            this.notes = []; // Contains arrays with [timestamp (seconds), text]
+            this.onChange();
+        }
+        drawNotes() {
+            if (!this.notes.length) {
+                if (this.notesBar)
+                    this.notesBar.style.display = 'none';
+            } else {
+                if (!this.notesBar) {
+                    this.notesBar = cr('div', { className:'ytsb-notes' });
+                    q('#player-theater-container').appendChild(this.notesBar);
+                }
+                this.notesBar.style.display = 'block';
+                [...this.notesBar.children].forEach(c => c.remove());
+                const drawNote = (note) => {
+                    const el = document.createElement('div');
+                    el.style.height = '100%';
+                    el.style.position = 'absolute';
+                    el.style.left = note[0] / video.duration * 100 + '%';
+                    el.style.width = '6px';
+                    el.style.backgroundColor = '#547';
+                    el.title = note[1];
+                    let prevClick = 0, tid;
+                    el.onclick = () => {
+                        clearTimeout(tid);
+                        if (Date.now() < prevClick + 200) {
+                            this.editNote(note);
+                        } else {
+                            prevClick = Date.now();
+                            tid = setTimeout(() => {
+                                video.currentTime = note[0];
+                            }, 200);
+                        }
+                    };
+                    this.notesBar.appendChild(el);
+                };
+                this.notes.forEach(note => drawNote(note));
+            }
+            this.note.element.innerText = `N${this.notes.length || ''}`;
+        }
+        editNote(note) {
+            const close = () => { this.popup.remove(); this.popup = null; }
+            if (this.popup) close();
+            this.popup = cr('div', { className:'ytsb-popup', innerText:note[0] }); // TODO: Format HH:MM:SS from note[0] timestamp
+            const inp = cr('textarea', { innerText:note[1] });
+            const cancel = cr('button', { innerText:'Cancel' });
+            const save = cr('button', { innerText:'Save' });
+            this.popup.appendChild(inp);
+            inp.onkeydown = ev => {
+                if (ev.key === 'Escape') close();
+                else if (ev.key === 'Enter' && ev.ctrlKey) { this.saveNote(note, inp.value); close(); }
+            };
+            cancel.onclick = () => { close(); }; //this.saveNote(note, note[1]);
+            save.onclick = () => { this.saveNote(note, inp.value); close(); };
+            this.popup.appendChild(save);
+            if (note[1].length) {
+                const remove = cr('button', { innerText:'Remove' });
+                remove.onclick = () => { this.saveNote(note, ''); close(); };
+                this.popup.appendChild(remove);
+            }
+            this.popup.appendChild(cancel);
+            this.popup.style.top = scrollY + document.querySelector('.title').getBoundingClientRect().top + 'px';
+            this.popup.style.left = (note[0] / video.duration * 80 + 10) + '%';
+            document.body.appendChild(this.popup);
+            inp.focus();
+        }
+        handleOnClick() {
+            // TODO: Check if there already is a note at current time before creating a new one
+            this.editNote([video.currentTime, '']);
+            this.drawNotes();
+        }
+        onChange() {
+            const params = new URLSearchParams(location.search);
+            this.videoId = params.get('v');
+            if (this.videoId) this.notes = GM_getValue(`n-${this.videoId}`, []);
+            else              this.notes = [];
+            this.drawNotes();
+        }
+        onKey(ev) {
+            super.onKey(ev);
+            this.handleOnClick();
+        }
+        onTimeUpdate() {
+        }
+        calculateNextSkip() {
+            this.notes.sort((a, b) => a[1] - b[1]);
+            const next = this.notes.find(trim => video.currentTime < trim[1]);
+            this.nextSkip = next ? next[1] : null;
+        }
+        saveNote(note, newText) { // empty newText removes note
+            if (this.notes.indexOf(note) !== -1) {
+                if (newText.length) {
+                    note[1] = newText;
+                } else {
+                    this.notes.splice(this.notes.indexOf(note), 1);
+                }
+            } else if (newText.length) {
+                note[1] = newText;
+                this.notes.push(note);
+            } else {
+                return;
+            }
+            this.saveNotes();
+            this.drawNotes();
+        }
+        saveNotes() {
+            if (!this.videoId)
+                this.videoId = new URLSearchParams(location.search).get('v');
+            if (this.videoId)
+                GM_setValue(`n-${this.videoId}`, this.notes);
         }
     }
 
@@ -804,7 +943,10 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
 .ytbc-p>input{
     pointer-events:auto;position:fixed;top:50vh;left:50vw;transform:translate(-50%,-50%);
     color:#350505;background-color:#d019108c;font-size:20px;padding:10px;border:none;text-align:center;}
-.ytbc-p>input:focus{outline:none;}`);
+.ytbc-p>input:focus{outline:none;}
+.ytsb-popup{position:absolute;background-color:#333;width:250px;display:grid;font-size:16px;
+    padding:5px;text-align:center;color:white;z-index:1000;}
+.ytsb-notes{position:absolute;bottom:-11px;left:11px;right:11px;height:11px;}`);
 
 
     // ====
@@ -825,7 +967,9 @@ const cr = (type, obj) => Object.assign(document.createElement(type), obj || {})
             'History':'mHistory',
             'Trim':'mTrim',
             'Copy':'mCopy',
-            'Media Session':'mMediaSession' };
+            'Media Session':'mMediaSession',
+            'Notes': 'mNotes'
+        };
         modules = settings.enabledModules.map(name => new mModule[REF[name]]());
 
         title.parentElement.insertBefore(container, title);
