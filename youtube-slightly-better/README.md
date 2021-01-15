@@ -16,6 +16,7 @@ A bitter attempt at making the YouTube experience better. This script adds a few
 | Copy | Copy video url with current timestamp. | c | yes |
 | Notes | Add notes to timestamps in videos. | n | yes |
 | Media Session | Fix media keys integration. | - | no |
+| Metadata | Save video metadata: title, uploader, etc. | - | no |
 
 ## Installation
 
