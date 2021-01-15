@@ -6,16 +6,16 @@ A bitter attempt at making the YouTube experience better. This script adds a few
 
 | Feature | Description | Key bindings | Enabled by default |
 | --- | --- | :---: | :---: |
-| Playback Rate | Way faster method of changing playback rate and with better precision (default 5% steps). | a, s, d | yes |
+| Playback Rate | Superior method of changing video playback rate, and with better precision. | a, s, d | yes |
 | Screenshot | Take screenshot and download it. | h | yes |
-| Go To Timestamp | Prompts the user to type a timestamp to jump to. | g | yes |
+| Go To Timestamp | Prompts the user for a timestamp to jump to. | g | yes |
 | Open Thumbnail | Open video thumbnail in new tab. | b | yes |
-| History | Remember all watched videos and print how many times current video has been watched. | | yes |
 | Progress | Show video progression below the video (percentage, time passed or time left). | p | yes |
 | Trim | Set trims for when video is autoplayed (eg. good for music videos in playlists). Video parts not within trims will be skipped. | y | yes |
-| Copy | Copy video url with current timestamp. | c | yes |
-| Notes | Add notes to timestamps in videos. | n | yes |
-| Media Session | Fix media keys integration. | - | no |
+| Copy | Copy video url with current timestamp. | v | yes |
+| Notes | Add notes at timestamps in videos. | n | yes |
+| History | Remember all watched videos and print how many times current video has been watched. | | no |
+| Media Session | Fix media keys integration. | | no |
 | Metadata | Save video metadata: title, uploader, etc. | - | no |
 
 ## Installation

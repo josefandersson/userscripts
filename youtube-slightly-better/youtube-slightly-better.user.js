@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.45
+// @version      1.46
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -34,25 +34,12 @@ let settings;
 const settingsDescriptor = {
     ytsb: ['YouTube Slightly Better', 'section', {
         keyPressRate: ['Key press rate (0 for system default)', 'number', 0],
-        enabledModules: ['Enabled modules', 'multiple',
-            ['Copy', 'Go To Timestamp', 'History', 'Media Session', 'Notes', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim', 'Metadata'],
-            ['Copy', 'Go To Timestamp', 'History', 'Media Session', 'Notes', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim']],
-        modules: ['Module settings', 'section', {
-            mPlaybackRate: ['Playback Rate', 'section', {
-                playbackRateStep: ['Playback rate step', 'number', 0.05],
-                minPlaybackRate: ['Minimum playback rate', 'number', 0.1],
-                maxPlaybackRate: ['Maximum playback rate', 'number', 3],
-            }, [{ path:['/', 'ytsb', 'enabledModules'], eval:v=>-1<v.indexOf('Playback Rate'), action:'hide' }]],
-            mHistory: ['History', 'section', {
-                minPercentageBeforeSeen: ['Minimum percentage before counted as seen', 'number', .8,, 0, 1, .05],
-            }, [{ path:['/', 'ytsb', 'enabledModules'], eval:v=>-1<v.indexOf('Playback Rate'), action:'hide' }]]
-        }],
+        enabledModules: ['Enabled modules', 'multiple', [], []],
+        modules: ['Module settings', 'section', {}],
         keybinds: ['Keybinds', 'section', {
-            mCopy: ['Copy', 'text', 'v'],
-            mGoToTimestamp: ['Go To Timestamp', 'text', 'v'],
-            mHistory: ['History', 'text', 'v'],
-            mOpenThumbnail: ['Open Thumbnail', 'text', 'v'],
-            mPlaybackRate: ['Playback Rate', 'text', 'v'],
+            mCopy: ['Copy url with timestamp', 'text', 'v'],
+            mGoToTimestamp: ['Go to timestamp', 'text', 'g'],
+            mOpenThumbnail: ['Open thumbnail', 'text', 'b'],
             mProgress: ['Progress', 'text', 'v'],
             mScreenshot: ['Screenshot', 'text', 'v'],
             mTrim: ['Trim', 'text', 'v']
@@ -155,6 +142,15 @@ const settingsDescriptor = {
             });
         }
         onKey(ev) { ev.preventDefault(); }
+        static registerSettings(defaultEnabled=false, moduleKeys=null, moduleSettings=null) {
+            settingsDescriptor.ytsb[2].enabledModules[2].push(this.name);
+            if (defaultEnabled)
+                settingsDescriptor.ytsb[2].enabledModules[3].push(this.name);
+            if (moduleKeys)
+                Object.assign(settingsDescriptor.ytsb[2].keybinds[2], moduleKeys);
+            if (moduleSettings)
+                settingsDescriptor.ytsb[2].modules[2][this.name] = moduleSettings;
+        }
     }
 
 
@@ -179,7 +175,7 @@ const settingsDescriptor = {
                     this.clearDown();
             });
             this.faster.addOnClick(() => this.changePlaybackRate(settings.modules.mPlaybackRate.playbackRateStep));
-            this.registerKeys(['a', 's', 'd']);
+            this.registerKeys([settings.keybinds.decreasePlaybackRate, settings.keybinds.resetPlaybackRate, settings.keybinds.increasePlaybackRate]);
         }
         getPlaybackRateStr() { return Video.v.playbackRate.toFixed(2) + ''; }
         changePlaybackRate(diff) { return this.setPlaybackRate(Video.v.playbackRate + diff); }
@@ -190,11 +186,24 @@ const settingsDescriptor = {
         }
         onKey(ev) {
             super.onKey(ev);
-            if (ev.key === 'a') this.changePlaybackRate(-settings.modules.mPlaybackRate.playbackRateStep);
-            else if (ev.key === 's') this.setPlaybackRate(1);
-            else if (ev.key === 'd') this.changePlaybackRate(settings.modules.mPlaybackRate.playbackRateStep);
+                 if (ev.key === settings.keybinds.decreasePlaybackRate) this.changePlaybackRate(-settings.modules.mPlaybackRate.playbackRateStep);
+            else if (ev.key === settings.keybinds.resetPlaybackRate)    this.setPlaybackRate(1);
+            else if (ev.key === settings.keybinds.increasePlaybackRate) this.changePlaybackRate(settings.modules.mPlaybackRate.playbackRateStep);
+        }
+        static registerSettings() {
+            super.registerSettings(true, {
+                decreasePlaybackRate: ['Decrease playback rate', 'text', 'a'],
+                resetPlaybackRate: ['Reset playback rate', 'text', 's'],
+                increasePlaybackRate: ['Increase playback rate', 'text', 'd']
+            }, ['Playback Rate', 'section', {
+                playbackRateStep: ['Playback rate step', 'number', 0.05],
+                minPlaybackRate: ['Minimum playback rate', 'number', 0.1],
+                maxPlaybackRate: ['Maximum playback rate', 'number', 3],
+            }, [{ path:['/', 'ytsb', 'enabledModules'], eval:v=>-1<v.indexOf('Playback Rate'), action:'hide' }]]);
         }
     };
+    mModule.mPlaybackRate.rName = 'Playback Rate';
+    mModule.mPlaybackRate.rDesc = 'Superior method of changing video playback rate, and with better precision.';
 
 
 
@@ -211,7 +220,7 @@ const settingsDescriptor = {
             super();
             this.open = this.addItem(new mItemBtn(this, 'B', 'Open video thumbnail\nKeybinding: b'));
             this.open.addOnClick(() => this.openThumbnail());
-            this.registerKeys(['b']);
+            this.registerKeys([settings.keybinds.openThumbnail]);
         }
         openThumbnail() {
             const url = this.getThumbnailUrl();
@@ -228,7 +237,14 @@ const settingsDescriptor = {
             super.onKey(ev);
             this.openThumbnail();
         }
+        static registerSettings() {
+            super.registerSettings(true, {
+                openThumbnail: ['Open thumbnail', 'text', 'b']
+            });
+        }
     };
+    mModule.mOpenThumbnail.rName = 'Open Thumbnail';
+    mModule.mOpenThumbnail.rDesc = 'Open video thumbnail in new tab.';
 
 
     
@@ -243,7 +259,7 @@ const settingsDescriptor = {
             super();
             this.screenshot = this.addItem(new mItemBtn(this, 'H', 'Take screenshot (video resolution decides image dimensions)\nKeybinding: h'));
             this.screenshot.addOnClick(() => this.takeScreenshot());
-            this.registerKeys(['h']);
+            this.registerKeys([settings.keybinds.screenshot]);
         }
         takeScreenshot() {
             const canvas = cr('canvas', { width:Video.v.videoWidth, height:Video.v.videoHeight });
@@ -257,7 +273,14 @@ const settingsDescriptor = {
             super.onKey(ev);
             this.takeScreenshot();
         }
+        static registerSettings() {
+            super.registerSettings(true, {
+                screenshot: ['Take screenshot', 'text', 'h']
+            });
+        }
     };
+    mModule.mScreenshot.rName = 'Screenshot';
+    mModule.mScreenshot.rDesc = 'Take screenshot and download it.';
 
 
 
@@ -280,7 +303,7 @@ const settingsDescriptor = {
             super();
             this.goto = this.addItem(new mItemBtn(this, 'G', 'Open go-to-timestamp prompt\nKeybinding: g'));
             this.goto.addOnClick(() => this.handleOnClick());
-            this.registerKeys(['g']);
+            this.registerKeys([settings.keybinds.goToTimestamp]);
             this.registerKeys(['Escape'], 'keyup');
         }
         handleOnClick() {
@@ -288,7 +311,7 @@ const settingsDescriptor = {
         }
         onKey(ev) {
             super.onKey(ev);
-            if (ev.key === 'g')
+            if (ev.key === settings.keybinds.goToTimestamp)
                 this.handleOnClick();
         }
         goToTimestamp(str) {
@@ -348,7 +371,14 @@ const settingsDescriptor = {
                 this.prompt = null;
             }
         }
+        static registerSettings() {
+            super.registerSettings(true, {
+                goToTimestamp: ['Go to timestamp', 'text', 'g']
+            });
+        }
     };
+    mModule.mGoToTimestamp.rName = 'Go To Timestamp';
+    mModule.mGoToTimestamp.rDesc = 'Prompts the user for a timestamp to jump to.';
 
 
 
@@ -439,7 +469,14 @@ const settingsDescriptor = {
             this.seen.element.style.color = '#ff4343';
             this.seen.element.innerText = this.historyData.n;
         }
+        static registerSettings() {
+            super.registerSettings(false, null, ['History', 'section', {
+                minPercentageBeforeSeen: ['Minimum percentage before counted as seen', 'number', .8,, 0, 1, .05],
+            }, [{ path:['/', 'ytsb', 'enabledModules'], eval:v=>-1<v.indexOf('Playback Rate'), action:'hide' }]]);
+        }
     };
+    mModule.mHistory.rName = 'History';
+    mModule.mHistory.rDesc = 'Remember all watched videos and print how many times current video has been watched.';
 
 
 
@@ -448,6 +485,7 @@ const settingsDescriptor = {
     // =====================
     //
     // - Print the video progress as percentage.
+    // TODO: Add 'minimum' format that shows the biggest unit (eg. 2h, 5m or 10s)
     //
     mModule.mProgress = class mProgress extends mModule {
         constructor() {
@@ -455,7 +493,7 @@ const settingsDescriptor = {
             this.progress = this.addItem(new mItemBtn(this, '0%', 'Video progression\nLeft-click: Cycle mode'));
             this.progress.addOnClick(() => this.handleOnClick());
             this.mode = 'percentage';
-            this.registerKeys(['p']);
+            this.registerKeys([settings.keybinds.progressFormat]);
             this.onChangeId = Video.addOnChange(() => this.onChange());
             Video.v.addEventListener('timeupdate', () => this.updateProgression()); // TODO: Add newVideo event to Video object
             this.onChange();
@@ -501,7 +539,14 @@ const settingsDescriptor = {
             }
             this.progress.element.innerText = newValue;
         }
+        static registerSettings() {
+            super.registerSettings(true, {
+                progressFormat: ['Change progress format', 'text', 'p']
+            });
+        }
     };
+    mModule.mProgress.rName = 'Progress';
+    mModule.mProgress.rDesc = 'Show video progression below the video.';
 
 
 
@@ -523,7 +568,7 @@ const settingsDescriptor = {
             super();
             this.trim = this.addItem(new mItemBtn(this, 'T', 'Trim'));
             this.trim.addOnClick(() => this.handleOnClick());
-            this.registerKeys(['y']);
+            this.registerKeys([settings.keybinds.trim]);
             this.onChangeId = Video.addOnChange(() => this.onChange());
             Video.v.addEventListener('timeupdate', ev => this.onTimeUpdate(ev)); // TODO: Add newVideo event to Video obj
             this.trims = []; // Contains arrays with [startTimestamp, endTimestamp] (seconds)
@@ -652,7 +697,14 @@ const settingsDescriptor = {
             if (Video.id)
                 GM_setValue(`t-${Video.id}`, this.trims);
         }
+        static registerSettings() {
+            super.registerSettings(true, {
+                trim: ['Trim', 'text', 't']
+            });
+        }
     };
+    mModule.mTrim.rName = 'Trim';
+    mModule.mTrim.rDesc = 'Set trims for skipping parts of videos not within trims.';
 
 
 
@@ -665,7 +717,7 @@ const settingsDescriptor = {
     mModule.mCopy = class mCopy extends mModule {
         constructor() {
             super();
-            this.registerKeys(['v']);
+            this.registerKeys([settings.keybinds.copy]);
         }
         onKey(ev) {
             super.onKey(ev);
@@ -682,7 +734,14 @@ const settingsDescriptor = {
             }).join('');
             navigator.clipboard.writeText(`https://youtu.be/${Video.id}?t=${time}`);
         }
+        static registerSettings() {
+            super.registerSettings(true, {
+                copy: ['Copy url with timestamp', 'text', 'v']
+            });
+        }
     };
+    mModule.mCopy.rName = 'Copy';
+    mModule.mCopy.rDesc = 'Copy video url with current timestamp.';
 
 
 
@@ -732,7 +791,12 @@ const settingsDescriptor = {
                     else      Video.v.currentTime = 0;
             }
         }
+        static registerSettings() {
+            super.registerSettings();
+        }
     };
+    mModule.mMediaSession.rName = 'Media Session';
+    mModule.mMediaSession.rDesc = 'Fix media keys integration.';
 
 
 
@@ -755,7 +819,7 @@ const settingsDescriptor = {
             super();
             this.note = this.addItem(new mItemBtn(this, 'N', 'Note'));
             this.note.addOnClick(() => this.handleOnClick());
-            this.registerKeys(['n']);
+            this.registerKeys([settings.keybinds.note]);
             Video.addOnChange(() => this.onChange());
             Video.v.addEventListener('timeupdate', ev => this.onTimeUpdate(ev));
             this.notes = []; // Contains arrays with [timestamp (seconds), text]
@@ -859,7 +923,14 @@ const settingsDescriptor = {
             if (Video.id)
                 GM_setValue(`n-${Video.id}`, this.notes);
         }
+        static registerSettings() {
+            super.registerSettings(true, {
+                note: ['Add note', 'text', 'n']
+            });
+        }
     };
+    mModule.mNotes.rName = 'Notes';
+    mModule.mNotes.rDesc = 'Add notes at timestamps in videos.';
 
 
 
@@ -893,6 +964,9 @@ const settingsDescriptor = {
         }
         removeMetadata() {
             GM_setValue(`m-${Video.id}`, null);
+        }
+        static registerSettings() {
+            super.registerSettings();
         }
     };
     mModule.mMetadata.rName = 'Metadata';
@@ -1003,19 +1077,8 @@ const settingsDescriptor = {
     function init() {
         container = cr('div', { className:'ytbc' });
 
-        const REF = {
-            'Progress': 'mProgress',
-            'Playback Rate':'mPlaybackRate',
-            'Open Thumbnail':'mOpenThumbnail',
-            'Screenshot':'mScreenshot',
-            'Go To Timestamp':'mGoToTimestamp',
-            'History':'mHistory',
-            'Trim':'mTrim',
-            'Copy':'mCopy',
-            'Media Session':'mMediaSession',
-            'Metadata': 'mMetadata',
-            'Notes': 'mNotes'
-        };
+        // Initialize modules
+        const REF = {}; Object.keys(mModule).forEach(k => REF[mModule[k].rName] = k);
         settings.enabledModules.map(name => new mModule[REF[name]]());
 
         title.parentElement.insertBefore(container, title);
@@ -1032,6 +1095,9 @@ const settingsDescriptor = {
             setTimeout(init, 20);
         }
     }, 50);
+
+    // Register settings all modules' settings
+    Object.keys(mModule).forEach(k => mModule[k].registerSettings());
 
     // Create settings instance
     const sObj = new UserscriptSettings(settingsDescriptor, { ytsb:GM_getValue('settings') });
