@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.43
+// @version      1.44
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -21,9 +21,9 @@
 //        - Smart speed module that analyzes the sound to vastly speed up the clip when no one is talking/no sound
 //        - Disable autoplaying 'channel trailer' video on channel page
 //        - Minimize player when scrolling down
-//        - Rewrite history module, if video is replayed without reloaded add extra plays to history, also save video title and uploader name,
+//        - Rewrite history module, if video is replayed without reloaded add extra plays to history,
 //          use video progression every second to check playtime instead of real life time since the video can be speed up/down
-//        - Add a video object that handles onChange instead of modules individually, along with other cross-module related functions and vars
+//        - Add module: Metadata - to save video title, uploader name, view count, upload date
 //        - Let each module itself add nodes to settings before creating UserscriptSettings instance
 
 
@@ -67,34 +67,73 @@ sObj.addOnChange(vals => {
 // Get current settings, including default values
 settings = Object.assign({}, UserscriptSettings.getValues('ytsb'));
 
-
-// ===============
-// Event Listening
-// ===============
-let keyListeners = {};
-
-function keyEvent(ev, event) {
-    if (keyListeners[ev.key] && keyListeners[ev.key][event])
-        if (ev.key === 'Escape' || (ev.target.getAttribute('contenteditable') != 'true' && ['INPUT', 'SELECT', 'TEXTAREA'].indexOf(ev.target.tagName) === -1))
-            keyListeners[ev.key][event].forEach(cb => cb(ev, event));
-}
-
-document.addEventListener('keypress', ev => keyEvent(ev, 'keypress'));
-document.addEventListener('keyup', ev => keyEvent(ev, 'keyup'));
-document.addEventListener('keydown', ev => keyEvent(ev, 'keydown'));
-
+// Register menu entry to open settings
 GM_registerMenuCommand('Settings', sObj.show, 's');
 
 
 
-// ================
-// Helper Functions
-// ================
-const cr = (type, obj) => Object.assign(document.createElement(type), obj || {});
-const q = (sel) => document.querySelector(sel);
-
-
 (() => {
+    // ================
+    // Helper Functions
+    // ================
+    const cr = (type, obj) => Object.assign(document.createElement(type), obj || {});
+    const q = (sel) => document.querySelector(sel);
+
+
+
+    // ======================
+    // Handle key events/cmds
+    // ======================
+    let keyListeners = {};
+
+    function keyEvent(ev, event) {
+        if (keyListeners[ev.key] && keyListeners[ev.key][event])
+            if (ev.key === 'Escape' || (ev.target.getAttribute('contenteditable') != 'true' && ['INPUT', 'SELECT', 'TEXTAREA'].indexOf(ev.target.tagName) === -1))
+                keyListeners[ev.key][event].forEach(cb => cb(ev, event));
+    }
+
+    document.addEventListener('keypress', ev => keyEvent(ev, 'keypress'));
+    document.addEventListener('keyup', ev => keyEvent(ev, 'keyup'));
+    document.addEventListener('keydown', ev => keyEvent(ev, 'keydown'));
+
+
+
+    // ==================
+    // Video/page handler
+    // ==================
+    // - Add a video object that handles onChange instead of modules individually, along with other cross-module related functions and vars
+    // TODO: When changing to some pages without a video player (settings? user profile?) we need to re-detect it when we are back to a video page
+    const Video = {
+        v: null,      // Video DOM element
+        id: null,     // Video id (v=xxxxxxxx in URL)
+        prevId: null, // Previous video id
+
+        onChangeCallbacks: [],
+        addOnChange: function(cb) {
+            let i = 0;
+            while (this.onChangeCallbacks[i] != null) i++;
+            this.onChangeCallbacks[i] = cb;
+            return i;
+        },
+        onChange: function() {
+            this.prevId = this.id;
+            this.id = new URLSearchParams(location.search).get('v');
+            this.onChangeCallbacks.forEach(cb => {
+                if (cb) cb();
+            });
+        },
+        removeOnChange: function(i) {
+            this.onChangeCallbacks[i] = null;
+        },
+
+        setVideo: function(video) {
+            this.v = video;
+            this.v.addEventListener('loadeddata', () => this.onChange());
+            this.onChange();
+        },
+    };
+
+
     // =======
     // Modules
     // =======
@@ -149,12 +188,12 @@ const q = (sel) => document.querySelector(sel);
             this.faster.addOnClick(() => this.changePlaybackRate(settings.modules.mPlaybackRate.playbackRateStep));
             this.registerKeys(['a', 's', 'd']);
         }
-        getPlaybackRateStr() { return video.playbackRate.toFixed(2) + ''; }
-        changePlaybackRate(diff) { return this.setPlaybackRate(video.playbackRate + diff); }
+        getPlaybackRateStr() { return Video.v.playbackRate.toFixed(2) + ''; }
+        changePlaybackRate(diff) { return this.setPlaybackRate(Video.v.playbackRate + diff); }
         setPlaybackRate(rate) {
-            video.playbackRate = Math.max(settings.modules.mPlaybackRate.minPlaybackRate, Math.min(settings.modules.mPlaybackRate.maxPlaybackRate, rate));
+            Video.v.playbackRate = Math.max(settings.modules.mPlaybackRate.minPlaybackRate, Math.min(settings.modules.mPlaybackRate.maxPlaybackRate, rate));
             this.speed.element.innerText = this.getPlaybackRateStr();
-            return video.playbackRate === rate;
+            return Video.v.playbackRate === rate;
         }
         onKey(ev) {
             super.onKey(ev);
@@ -171,6 +210,7 @@ const q = (sel) => document.querySelector(sel);
     //
     // - Open video thumbnail by clicking on B.
     // - Use keybinding b to open thumbnail.
+    // TODO: This method of getting thumbnail doesn't work on all videos
     //
     mModule.mOpenThumbnail = class mOpenThumbnail extends mModule {
         constructor() {
@@ -187,8 +227,7 @@ const q = (sel) => document.querySelector(sel);
             }
         }
         getThumbnailUrl() {
-            const videoId = new URLSearchParams(location.search).get('v');
-            if (videoId) return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+            if (Video.id) return `https://img.youtube.com/vi/${Video.id}/maxresdefault.jpg`;
             else         return null;
         }
         onKey(ev) {
@@ -202,8 +241,7 @@ const q = (sel) => document.querySelector(sel);
     // Screenshot Module
     // =====================
     //
-    // - Take screenshot and download it by clicking on H.
-    // - Use keybinding h to take screenshot.
+    // - Take screenshot and download it.
     //
     mModule.mScreenshot = class mScreenshot extends mModule {
         constructor() {
@@ -213,14 +251,11 @@ const q = (sel) => document.querySelector(sel);
             this.registerKeys(['h']);
         }
         takeScreenshot() {
-            const canvas = cr('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            const canvas = cr('canvas', { width:Video.v.videoWidth, height:Video.v.videoHeight });
             const context = canvas.getContext('2d');
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            context.drawImage(Video.v, 0, 0, canvas.width, canvas.height);
             const dataUrl = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
-            const videoId = new URLSearchParams(location.search).get('v');
-            const link = cr('a', { download:`screenshot-${videoId}.png`, href:dataUrl });
+            const link = cr('a', { download:`screenshot-${Video.id}.png`, href:dataUrl });
             link.click();
         }
         onKey(ev) {
@@ -274,9 +309,8 @@ const q = (sel) => document.querySelector(sel);
                 t = str.split(/[: ]/).reverse().map(n => +n);
             }
             const s = (t[0]||0) + (t[1]||0) * 60 + (t[2]||0) * 3600;
-            console.log(s);
-            if (s < video.duration)
-                video.currentTime = s;
+            if (s < Video.v.duration)
+                Video.v.currentTime = s;
         }
         openPrompt() {
             if (this.prompt) return this.closePrompt();
@@ -333,19 +367,17 @@ const q = (sel) => document.querySelector(sel);
             this.seen = this.addItem(new mItemBtn(this, '-', 'Prints number of times you have watched this video\nRed texts means current viewing is not yet counted\nGreen texts means number includes current viewing\nLeft-click: Add current viewing to count (make number green)'));
             this.seen.addOnClick(() => this.onClick());
             this.isPlaying = false;
-            video.addEventListener('loadeddata', ev => this.onChange(ev));
-            video.addEventListener('play', ev => this.onPlay(ev));
-            video.addEventListener('pause', ev => this.onPause(ev));
+            Video.addOnChange(() => this.onChange());
+            Video.v.addEventListener('play', ev => this.onPlay(ev)); // TODO: Add videoChange event (or similar) to Video object to re-add these listeners when video element changes
+            Video.v.addEventListener('pause', ev => this.onPause(ev));
             this.onChange();
         }
         onChange() {
-            const prevVideoId = this.videoId;
-            this.videoId = new URLSearchParams(location.search).get('v');
-            if (this.videoId && this.videoId !== prevVideoId) {
+            if (Video.id && Video.id != Video.prevId) {
                 this.isCounted = false; // TODO: remove
                 this.replays = 1;
                 this.startedWatchingAt = Date.now();
-                this.historyData = GM_getValue(`h-${this.videoId}`, null);
+                this.historyData = GM_getValue(`h-${Video.id}`, null);
                 if (this.historyData) {
                     this.seen.element.innerText = this.historyData.n;
                     this.seen.element.style.color = '#ff4343';
@@ -353,10 +385,10 @@ const q = (sel) => document.querySelector(sel);
                     this.seen.element.innerText = '0';
                     this.seen.element.style.color = 'inherit';
                 }
-                this.minimumTime = settings.modules.mHistory.minPercentageBeforeSeen * video.duration * 1000;
+                this.minimumTime = settings.modules.mHistory.minPercentageBeforeSeen * Video.v.duration * 1000;
                 this.onPause();
                 this.currentPlaytime = 0;
-                if (!video.paused)
+                if (!Video.v.paused)
                     this.onPlay();
             }
         }
@@ -395,7 +427,7 @@ const q = (sel) => document.querySelector(sel);
                 this.historyData.n ++;
             } else
                 this.historyData = { f:startedWatchingAt, l:startedWatchingAt, n:1 };
-            GM_setValue(`h-${this.videoId}`, this.historyData);
+            GM_setValue(`h-${Video.id}`, this.historyData);
             this.seen.element.style.color = '#4af150';
             this.seen.element.innerText = this.historyData.n;
         }
@@ -406,7 +438,7 @@ const q = (sel) => document.querySelector(sel);
             this.replays --;
             this.historyData.l = this.previousL;
             this.historyData.n --;
-            GM_setValue(`h-${this.videoId}`, this.historyData);
+            GM_setValue(`h-${Video.id}`, this.historyData);
             this.seen.element.style.color = '#ff4343';
             this.seen.element.innerText = this.historyData.n;
         }
@@ -426,8 +458,8 @@ const q = (sel) => document.querySelector(sel);
             this.progress.addOnClick(() => this.handleOnClick());
             this.mode = 'percentage';
             this.registerKeys(['p']);
-            video.addEventListener('loadeddata', () => this.onChange());
-            video.addEventListener('timeupdate', () => this.updateProgression());
+            this.onChangeId = Video.addOnChange(() => this.onChange());
+            Video.v.addEventListener('timeupdate', () => this.updateProgression()); // TODO: Add newVideo event to Video object
             this.onChange();
         }
         handleOnClick() {
@@ -436,7 +468,7 @@ const q = (sel) => document.querySelector(sel);
             this.updateProgression();
         }
         onChange() {
-            this.units = video.duration < 3600 ? [60,1] : [3600,60,1];
+            this.units = Video.v.duration < 3600 ? [60,1] : [3600,60,1];
             this.updateProgression();
         }
         onKey(ev) {
@@ -444,24 +476,24 @@ const q = (sel) => document.querySelector(sel);
             this.handleOnClick();
         }
         updateProgression() {
-            if (!video.duration)
+            if (!Video.v.duration)
                 return;
             let newValue;
             switch (this.mode) {
                 case 'percentage':
-                    newValue = Math.round(video.currentTime / video.duration * 100);
+                    newValue = Math.round(Video.v.currentTime / Video.v.duration * 100);
                     if (newValue === this.oldValue)
                         return;
                     newValue = this.oldValue = `${newValue}%`;
                     break;
                 case 'time':
-                    newValue = Math.round(video.currentTime);
+                    newValue = Math.round(Video.v.currentTime);
                     if (newValue === this.oldValue)
                         return;
                     newValue = this.oldValue = this.units.map(v => { const nv=Math.floor(newValue/v); newValue%=v; return nv < 10 ? `0${nv}` : nv; }).join(':');
                     break;
                 case 'timeleft':
-                    newValue = Math.round(video.duration - video.currentTime);
+                    newValue = Math.round(Video.v.duration - Video.v.currentTime);
                     if (newValue === this.oldValue)
                         return;
                     newValue = this.oldValue = this.units.map(v => { const nv=Math.floor(newValue/v); newValue%=v; return nv < 10 ? `0${nv}` : nv; }).join(':');
@@ -474,7 +506,7 @@ const q = (sel) => document.querySelector(sel);
     }
 
 
-    const TRIM_PROXIMITY = .99;
+    const TRIM_PROXIMITY = .99; // TODO: Add to settings
 
     // ===========
     // Trim Module
@@ -493,8 +525,8 @@ const q = (sel) => document.querySelector(sel);
             this.trim = this.addItem(new mItemBtn(this, 'T', 'Trim'));
             this.trim.addOnClick(() => this.handleOnClick());
             this.registerKeys(['y']);
-            video.addEventListener('loadeddata', ev => this.onChange(ev));
-            video.addEventListener('timeupdate', ev => this.onTimeUpdate(ev));
+            this.onChangeId = Video.addOnChange(() => this.onChange());
+            Video.v.addEventListener('timeupdate', ev => this.onTimeUpdate(ev)); // TODO: Add newVideo event to Video obj
             this.trims = []; // Contains arrays with [startTimestamp, endTimestamp] (seconds)
             this.current = null;
             this.onChange();
@@ -509,8 +541,8 @@ const q = (sel) => document.querySelector(sel);
                     const trim = document.createElement('div');
                     trim.style.height = '150%';
                     trim.style.position = 'absolute';
-                    trim.style.left = start / video.duration * 100 + '%';
-                    trim.style.width = (end - start) / video.duration * 100 + '%';
+                    trim.style.left = start / Video.v.duration * 100 + '%';
+                    trim.style.width = (end - start) / Video.v.duration * 100 + '%';
                     trim.style.backgroundColor = '#dd2fe0';
                     let prevClick = 0;
                     let id;
@@ -523,7 +555,7 @@ const q = (sel) => document.querySelector(sel);
                         } else {
                             prevClick = Date.now();
                             id = setTimeout(() => {
-                                video.currentTime = start;
+                                Video.v.currentTime = start;
                             }, 200);
                         }
                     };
@@ -534,7 +566,7 @@ const q = (sel) => document.querySelector(sel);
                     const curr = document.createElement('div');
                     curr.style.height = '200%';
                     curr.style.position = 'absolute';
-                    curr.style.left = this.current / video.duration * 100 + '%';
+                    curr.style.left = this.current / Video.v.duration * 100 + '%';
                     curr.style.width = '2px';
                     curr.style.backgroundColor = '#40fdd1';
                     this.trimBar.appendChild(curr);
@@ -543,7 +575,7 @@ const q = (sel) => document.querySelector(sel);
             this.trim.element.innerText = `T${this.trims.length || ''}`;
         }
         handleOnClick() {
-            const currentTime = video.currentTime;
+            const currentTime = Video.v.currentTime;
             if (this.inProximity(currentTime, this.current, TRIM_PROXIMITY)) {
                 this.current = null;
                 this.trim.element.style.color = '';
@@ -573,12 +605,8 @@ const q = (sel) => document.querySelector(sel);
             return Math.abs(val1 - val2) < prox;
         }
         onChange() {
-            const params = new URLSearchParams(location.search);
-            this.videoId = params.get('v');
-            if (this.videoId)
-                this.trims = GM_getValue(`t-${this.videoId}`, []);
-            else
-                this.trims = [];
+            if (Video.id) this.trims = GM_getValue(`t-${Video.id}`, []);
+            else          this.trims = [];
             if (!this.trimBar) {
                 const buttons = document.querySelector('.ytp-chrome-controls');
                 this.trimBar = document.createElement('div');
@@ -590,9 +618,10 @@ const q = (sel) => document.querySelector(sel);
             }
             this.current = null;
             this.trim.element.style.color = '';
+            const params = new URLSearchParams(location.search); // TODO: Add t param to Video obj
             if (this.trims.length && !params.get('t')) {
                 this.trims.sort((a, b) => a[0] - b[0]);
-                video.currentTime = this.trims[0][0];
+                Video.v.currentTime = this.trims[0][0];
             }
             this.calculateNextSkip();
             this.drawTrims();
@@ -603,28 +632,26 @@ const q = (sel) => document.querySelector(sel);
         }
         onTimeUpdate() {
             if (this.nextSkip) {
-                if (this.nextSkip <= video.currentTime) {
+                if (this.nextSkip <= Video.v.currentTime) {
                     this.calculateNextSkip();
                     if (this.nextSkip) {
                         this.trims.sort((a, b) => a[0] - b[0]);
-                        video.currentTime = this.trims.find(trim => video.currentTime < trim[0])[0];
+                        Video.v.currentTime = this.trims.find(trim => Video.v.currentTime < trim[0])[0];
                     } else {
-                        video.currentTime = video.duration;
+                        Video.v.currentTime = Video.v.duration;
                     }
                 }
             }
         }
         calculateNextSkip() {
             this.trims.sort((a, b) => a[1] - b[1]);
-            const next = this.trims.find(trim => video.currentTime < trim[1]);
+            const next = this.trims.find(trim => Video.v.currentTime < trim[1]);
             this.nextSkip = next ? next[1] : null;
         }
         saveTrims() {
             this.calculateNextSkip();
-            if (!this.videoId)
-                this.videoId = new URLSearchParams(location.search).get('v');
-            if (this.videoId)
-                GM_setValue(`t-${this.videoId}`, this.trims);
+            if (Video.id)
+                GM_setValue(`t-${Video.id}`, this.trims);
         }
     }
 
@@ -643,15 +670,10 @@ const q = (sel) => document.querySelector(sel);
         }
         onKey(ev) {
             super.onKey(ev);
-            if (!video.duration)
-                return;
-            const prms = new URLSearchParams(location.search);
-            const vid = prms.get('v');
-            if (!vid)
-                return;
-            const units = video.duration < 3600 ? [60,1] : [3600,60,1];
-            const unitNms = ['s', 'm', 'h'];
-            let cur = Math.round(video.currentTime);
+            if (!Video.v.duration || !Video.id) return;
+            const units = Video.v.duration < 3600 ? [60,1] : [3600,60,1];
+            const unitNms = ['s', 'm', 'h']; // TODO: Move this function to convert s to hh:mm:ss to helper functions, to be used in other modules
+            let cur = Math.round(Video.v.currentTime);
             const time = units.map((v, i) => {
                 const nv = Math.floor(cur/v);
                 cur %= v;
@@ -659,7 +681,7 @@ const q = (sel) => document.querySelector(sel);
                     return '';
                 return (nv < 10 ? `0${nv}` : nv) + unitNms[units.length-1-i];
             }).join('');
-            navigator.clipboard.writeText(`https://youtu.be/${vid}?t=${time}`);
+            navigator.clipboard.writeText(`https://youtu.be/${Video.id}?t=${time}`);
         }
     }
 
@@ -678,16 +700,15 @@ const q = (sel) => document.querySelector(sel);
             setInterval(() => {
                 // document.title = 'State: ' + navigator.mediaSession.playbackState + ' ' + data;
             }, 200);
-            if (!video.paused) {
-                video.pause();
-                video.play();
+            if (!Video.v.paused) {
+                Video.v.pause();
+                Video.v.play();
             }
-            video.addEventListener('play', () => data += 'PLAY'); // TODO: If window was just created then pause the video, then play video when window gains focus
-            video.addEventListener('pause', () => data += 'PAUS');
-            video.addEventListener('loadeddata', ev => setTimeout(() => {
-                this.onChange(ev);
-            }, 200)); // TODO: Should it be 200ms?
-            video.addEventListener('ended', () => navigator.mediaSession.playbackState = 'paused');
+            // TODO: Add newVideo event to Video obj to update these event listeners
+            Video.v.addEventListener('play', () => data += 'PLAY'); // TODO: If window was just created then pause the video, then play video when window gains focus
+            Video.v.addEventListener('pause', () => data += 'PAUS');
+            Video.v.addEventListener('ended', () => navigator.mediaSession.playbackState = 'paused');
+            Video.addOnChange(() => setTimeout(() => this.onChange(), 200)); // TODO: Should it be 200ms?
             this.onChange();
         }
         onChange() {
@@ -701,17 +722,15 @@ const q = (sel) => document.querySelector(sel);
             navigator.mediaSession.setActionHandler('seekto', ev => this.onMedia(ev));
         }
         onMedia(ev) {
-            console.log(ev);
             switch (ev.action) {
                 case 'stop':
-                case 'play': video.play(); break;
-                case 'pause': video.pause(); break;
+                case 'play': Video.v.play(); break;
+                case 'pause': Video.v.pause(); break;
                 case 'nexttrack': document.querySelector('.ytp-next-button').click(); break;
                 case 'previoustrack':
                     let prev = document.querySelector('.ytp-prev-button');
                     if (prev) prev.click();
-                    else      video.currentTime = 0;
-                    break;
+                    else      Video.v.currentTime = 0;
             }
         }
     }
@@ -730,6 +749,8 @@ const q = (sel) => document.querySelector(sel);
     // TODO: Make compatible with normal viewing mode (not thetre), specifically don't use #player-theater-container as parent
     // TODO: Make note text show somewhere when within x seconds of timestamp
     // TODO: Make a custom popup window for displaying the text instead of builtin titles
+    // TODO: Add better styling on note marker (on hover: color, resize, pointer)
+    // TODO: Add popup to list all notes on current video
     //
     mModule.mNotes = class mTrim extends mModule {
         constructor() {
@@ -737,8 +758,8 @@ const q = (sel) => document.querySelector(sel);
             this.note = this.addItem(new mItemBtn(this, 'N', 'Note'));
             this.note.addOnClick(() => this.handleOnClick());
             this.registerKeys(['n']);
-            video.addEventListener('loadeddata', ev => this.onChange(ev));
-            video.addEventListener('timeupdate', ev => this.onTimeUpdate(ev));
+            Video.addOnChange(() => this.onChange());
+            Video.v.addEventListener('timeupdate', ev => this.onTimeUpdate(ev));
             this.notes = []; // Contains arrays with [timestamp (seconds), text]
             this.onChange();
         }
@@ -757,7 +778,7 @@ const q = (sel) => document.querySelector(sel);
                     const el = document.createElement('div');
                     el.style.height = '100%';
                     el.style.position = 'absolute';
-                    el.style.left = note[0] / video.duration * 100 + '%';
+                    el.style.left = note[0] / Video.v.duration * 100 + '%';
                     el.style.width = '6px';
                     el.style.backgroundColor = '#547';
                     el.title = note[1];
@@ -768,9 +789,7 @@ const q = (sel) => document.querySelector(sel);
                             this.editNote(note);
                         } else {
                             prevClick = Date.now();
-                            tid = setTimeout(() => {
-                                video.currentTime = note[0];
-                            }, 200);
+                            tid = setTimeout(() => Video.v.currentTime = note[0], 200);
                         }
                     };
                     this.notesBar.appendChild(el);
@@ -783,38 +802,31 @@ const q = (sel) => document.querySelector(sel);
             const close = () => { this.popup.remove(); this.popup = null; }
             if (this.popup) close();
             this.popup = cr('div', { className:'ytsb-popup', innerText:note[0] }); // TODO: Format HH:MM:SS from note[0] timestamp
-            const inp = cr('textarea', { innerText:note[1] });
-            const cancel = cr('button', { innerText:'Cancel' });
-            const save = cr('button', { innerText:'Save' });
-            this.popup.appendChild(inp);
-            inp.onkeydown = ev => {
-                if (ev.key === 'Escape') close();
+            const inp = cr('textarea', { innerText:note[1], onkeydown:ev=>{
+                if      (ev.key === 'Escape')              { close(); }
                 else if (ev.key === 'Enter' && ev.ctrlKey) { this.saveNote(note, inp.value); close(); }
-            };
-            cancel.onclick = () => { close(); }; //this.saveNote(note, note[1]);
-            save.onclick = () => { this.saveNote(note, inp.value); close(); };
+            }});
+            const cancel = cr('button', { innerText:'Cancel', onclick:()=>{ close(); } });
+            const save = cr('button', { innerText:'Save', onclick:()=>{ this.saveNote(note, inp.value); close(); } });
+            this.popup.appendChild(inp);
             this.popup.appendChild(save);
             if (note[1].length) {
-                const remove = cr('button', { innerText:'Remove' });
-                remove.onclick = () => { this.saveNote(note, ''); close(); };
-                this.popup.appendChild(remove);
+                this.popup.appendChild(cr('button', { innerText:'Remove', onClick:()=>{ this.saveNote(note, ''); close(); } }));
             }
             this.popup.appendChild(cancel);
             this.popup.style.top = scrollY + document.querySelector('.title').getBoundingClientRect().top + 'px';
-            this.popup.style.left = (note[0] / video.duration * 80 + 10) + '%';
+            this.popup.style.left = (note[0] / Video.v.duration * 80 + 10) + '%';
             document.body.appendChild(this.popup);
             inp.focus();
         }
         handleOnClick() {
             // TODO: Check if there already is a note at current time before creating a new one
-            this.editNote([video.currentTime, '']);
+            this.editNote([Video.v.currentTime, '']);
             this.drawNotes();
         }
         onChange() {
-            const params = new URLSearchParams(location.search);
-            this.videoId = params.get('v');
-            if (this.videoId) this.notes = GM_getValue(`n-${this.videoId}`, []);
-            else              this.notes = [];
+            if (Video.id) this.notes = GM_getValue(`n-${Video.id}`, []);
+            else          this.notes = [];
             this.drawNotes();
         }
         onKey(ev) {
@@ -822,10 +834,11 @@ const q = (sel) => document.querySelector(sel);
             this.handleOnClick();
         }
         onTimeUpdate() {
+            // TODO: Check notes as video progress and display those which are in proximity
         }
         calculateNextSkip() {
             this.notes.sort((a, b) => a[1] - b[1]);
-            const next = this.notes.find(trim => video.currentTime < trim[1]);
+            const next = this.notes.find(trim => Video.v.currentTime < trim[1]);
             this.nextSkip = next ? next[1] : null;
         }
         saveNote(note, newText) { // empty newText removes note
@@ -845,10 +858,8 @@ const q = (sel) => document.querySelector(sel);
             this.drawNotes();
         }
         saveNotes() {
-            if (!this.videoId)
-                this.videoId = new URLSearchParams(location.search).get('v');
-            if (this.videoId)
-                GM_setValue(`n-${this.videoId}`, this.notes);
+            if (Video.id)
+                GM_setValue(`n-${Video.id}`, this.notes);
         }
     }
 
@@ -952,7 +963,7 @@ const q = (sel) => document.querySelector(sel);
     // ====
     // Init
     // ====
-    let title, video, container;
+    let title, container;
     let modules = null;
 
     function init() {
@@ -979,8 +990,9 @@ const q = (sel) => document.querySelector(sel);
     // TODO: If current page isn't a watch page maybe we should wait some other way?
     let id = setInterval(() => {
         if (!title) title = document.querySelector('#container>.title');
-        if (!video) video = document.querySelector('video');
-        if (title && video) {
+        if (!Video.v) Video.v = document.querySelector('video');
+        if (title && Video.v) {
+            Video.setVideo(Video.v);
             clearInterval(id);
             setTimeout(init, 20);
         }
