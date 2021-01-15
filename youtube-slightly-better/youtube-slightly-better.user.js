@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.44
+// @version      1.45
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -31,11 +31,11 @@
 // User settings
 // =============
 let settings;
-const sObj = new UserscriptSettings({
+const settingsDescriptor = {
     ytsb: ['YouTube Slightly Better', 'section', {
         keyPressRate: ['Key press rate (0 for system default)', 'number', 0],
         enabledModules: ['Enabled modules', 'multiple',
-            ['Copy', 'Go To Timestamp', 'History', 'Media Session', 'Notes', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim'],
+            ['Copy', 'Go To Timestamp', 'History', 'Media Session', 'Notes', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim', 'Metadata'],
             ['Copy', 'Go To Timestamp', 'History', 'Media Session', 'Notes', 'Open Thumbnail', 'Playback Rate', 'Progress', 'Screenshot', 'Trim']],
         modules: ['Module settings', 'section', {
             mPlaybackRate: ['Playback Rate', 'section', {
@@ -58,17 +58,7 @@ const sObj = new UserscriptSettings({
             mTrim: ['Trim', 'text', 'v']
         }]
     }]
-}, { ytsb:GM_getValue('settings') });
-
-sObj.addOnChange(vals => {
-    GM_setValue('settings', settings = vals);
-}, 'ytsb');
-
-// Get current settings, including default values
-settings = Object.assign({}, UserscriptSettings.getValues('ytsb'));
-
-// Register menu entry to open settings
-GM_registerMenuCommand('Settings', sObj.show, 's');
+};
 
 
 
@@ -134,6 +124,7 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
     };
 
 
+
     // =======
     // Modules
     // =======
@@ -165,6 +156,8 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
         }
         onKey(ev) { ev.preventDefault(); }
     }
+
+
 
     // ====================
     // Playback Rate Module
@@ -201,7 +194,8 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
             else if (ev.key === 's') this.setPlaybackRate(1);
             else if (ev.key === 'd') this.changePlaybackRate(settings.modules.mPlaybackRate.playbackRateStep);
         }
-    }
+    };
+
 
 
     // =====================
@@ -234,7 +228,8 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
             super.onKey(ev);
             this.openThumbnail();
         }
-    }
+    };
+
 
     
     // =====================
@@ -262,9 +257,10 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
             super.onKey(ev);
             this.takeScreenshot();
         }
-    }
+    };
 
-    
+
+
     // =====================
     // Go To Timestamp Module
     // =====================
@@ -352,9 +348,10 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
                 this.prompt = null;
             }
         }
-    }
+    };
 
-    
+
+
     // =====================
     // History Module
     // =====================
@@ -442,7 +439,8 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
             this.seen.element.style.color = '#ff4343';
             this.seen.element.innerText = this.historyData.n;
         }
-    }
+    };
+
 
 
     // =====================
@@ -503,7 +501,8 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
             }
             this.progress.element.innerText = newValue;
         }
-    }
+    };
+
 
 
     const TRIM_PROXIMITY = .99; // TODO: Add to settings
@@ -653,7 +652,7 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
             if (Video.id)
                 GM_setValue(`t-${Video.id}`, this.trims);
         }
-    }
+    };
 
 
 
@@ -683,7 +682,7 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
             }).join('');
             navigator.clipboard.writeText(`https://youtu.be/${Video.id}?t=${time}`);
         }
-    }
+    };
 
 
 
@@ -733,8 +732,7 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
                     else      Video.v.currentTime = 0;
             }
         }
-    }
-
+    };
 
 
 
@@ -861,7 +859,44 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
             if (Video.id)
                 GM_setValue(`n-${Video.id}`, this.notes);
         }
-    }
+    };
+
+
+
+    // ===============
+    // Metadata Module
+    // ===============
+    //
+    // - Save video metadata: title, uploader, upload date, view count, likes, dislikes
+    // - If history module is enabled, last watch date will most likely be last time metadata was updated
+    //
+    mModule.mMetadata = class mMetadata extends mModule {
+        constructor() {
+            super();
+            this.onChangeId = Video.addOnChange(() => this.onChange());
+            this.onChange();
+        }
+        onChange() {
+            if (Video.id && Video.id != Video.prevId)
+                setTimeout(() => this.saveMetadata(), 10);
+        }
+        saveMetadata() {
+            GM_setValue(`m-${Video.id}`, {
+                title: title.innerText,
+                uploaded: new Date(q('#date>yt-formatted-string').innerText).getTime(),
+                uploaderName: q('.ytd-channel-name').innerText,
+                uploaderId: /.*\/(.*)$/.exec(q('.ytd-channel-name a').href)[1], // youtube.com/channel/<uploaderId>
+                views: +q('.view-count').innerText.replace(/[^0-9]/g,''),
+                likes: +q('#top-level-buttons>:first-child').innerText.replace(/[^0-9]/g,''),
+                dislikes: +q('#top-level-buttons>:nth-child(2)').innerText.replace(/[^0-9]/g,''),
+            });
+        }
+        removeMetadata() {
+            GM_setValue(`m-${Video.id}`, null);
+        }
+    };
+    mModule.mMetadata.rName = 'Metadata';
+    mModule.mMetadata.rDesc = 'Save video metadata: title, uploader, upload date, view count, likes and dislikes.';
 
 
 
@@ -964,7 +999,6 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
     // Init
     // ====
     let title, container;
-    let modules = null;
 
     function init() {
         container = cr('div', { className:'ytbc' });
@@ -979,9 +1013,10 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
             'Trim':'mTrim',
             'Copy':'mCopy',
             'Media Session':'mMediaSession',
+            'Metadata': 'mMetadata',
             'Notes': 'mNotes'
         };
-        modules = settings.enabledModules.map(name => new mModule[REF[name]]());
+        settings.enabledModules.map(name => new mModule[REF[name]]());
 
         title.parentElement.insertBefore(container, title);
     }
@@ -997,4 +1032,14 @@ GM_registerMenuCommand('Settings', sObj.show, 's');
             setTimeout(init, 20);
         }
     }, 50);
+
+    // Create settings instance
+    const sObj = new UserscriptSettings(settingsDescriptor, { ytsb:GM_getValue('settings') });
+    sObj.addOnChange(vals => GM_setValue('settings', settings = vals), 'ytsb');
+
+    // Get current settings, including default values
+    settings = Object.assign({}, UserscriptSettings.getValues('ytsb'));
+
+    // Register menu entry to open settings
+    GM_registerMenuCommand('Settings', sObj.show, 's');
 })();
