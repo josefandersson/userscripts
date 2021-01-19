@@ -16,7 +16,7 @@ A bitter attempt at making the YouTube experience better. This script adds a few
 | Notes | Add notes at timestamps in videos. | n | yes |
 | History | Remember all watched videos and print how many times current video has been watched. | | no |
 | Media Session | Fix media keys integration. | | no |
-| Metadata | Save video metadata: title, uploader, etc. | - | no |
+| Metadata | Save video metadata: title, uploader, etc. | | no |
 
 ## Installation
 

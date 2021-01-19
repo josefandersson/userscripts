@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.46
+// @version      1.47
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -17,14 +17,15 @@
 // FIXME: - Opening video in new tab will not autoplay the video, but it will
 //          still add the video to history if tab is opened for more than 10 seconds
 // TODO:  - Playlists: reverse, shuffle
-//        - (opt-in to) Remember video titles and uploader so that we can fill the void when videos are removed
 //        - Smart speed module that analyzes the sound to vastly speed up the clip when no one is talking/no sound
 //        - Disable autoplaying 'channel trailer' video on channel page
 //        - Minimize player when scrolling down
 //        - Rewrite history module, if video is replayed without reloaded add extra plays to history,
 //          use video progression every second to check playtime instead of real life time since the video can be speed up/down
-//        - Add module: Metadata - to save video title, uploader name, view count, upload date
-//        - Let each module itself add nodes to settings before creating UserscriptSettings instance
+//        - Remake init and module system somewhat, so that it inits on any page, not just when video is detected, also add onEnable/onDisable for toggling modules
+//        - Trim module resets the first time if "loop" is enabled, but the next time it doesn't stop at trim end
+//        - Can't seem to start trim at start of video?
+//        - Remake trim module, create a new bar collection below controls, but perhaps still on video, where all bars are collected
 
 
 // =============
@@ -36,14 +37,7 @@ const settingsDescriptor = {
         keyPressRate: ['Key press rate (0 for system default)', 'number', 0],
         enabledModules: ['Enabled modules', 'multiple', [], []],
         modules: ['Module settings', 'section', {}],
-        keybinds: ['Keybinds', 'section', {
-            mCopy: ['Copy url with timestamp', 'text', 'v'],
-            mGoToTimestamp: ['Go to timestamp', 'text', 'g'],
-            mOpenThumbnail: ['Open thumbnail', 'text', 'b'],
-            mProgress: ['Progress', 'text', 'v'],
-            mScreenshot: ['Screenshot', 'text', 'v'],
-            mTrim: ['Trim', 'text', 'v']
-        }]
+        keybinds: ['Keybinds', 'section', {}]
     }]
 };
 
@@ -54,8 +48,12 @@ const settingsDescriptor = {
     // Helper Functions
     // ================
     const cr = (type, obj) => Object.assign(document.createElement(type), obj || {});
-    const q = (sel) => document.querySelector(sel);
-
+    const q = sel => document.querySelector(sel);
+    const qa = sel => document.querySelectorAll(sel);
+    const secondsToHms = (sec, dyn=true, units=null) => {
+        if (!units) units = dyn && Video.v.duration < 3600 ? [60,1] : [3600,60,1];
+        return units.map(v => { const nv=Math.floor(sec/v); sec%=v; return nv < 10 ? `0${nv}` : nv; }).join(':');
+    };
 
 
     // ======================
@@ -75,9 +73,9 @@ const settingsDescriptor = {
 
 
 
-    // ==================
-    // Video/page handler
-    // ==================
+    // =============
+    // Video handler
+    // =============
     // - Add a video object that handles onChange instead of modules individually, along with other cross-module related functions and vars
     // TODO: When changing to some pages without a video player (settings? user profile?) we need to re-detect it when we are back to a video page
     const Video = {
@@ -112,6 +110,48 @@ const settingsDescriptor = {
 
 
 
+    // ============
+    // Page handler
+    // ============
+    const Page = {
+        prevUrl: null,
+        loop: function() {
+            if (location.href !== this.prevUrl) {
+                this.onChange();
+                this.prevUrl = location.href;
+            }
+            if (this.onChangeCallbacks.length) {
+                this.id = setTimeout(() => this.loop, 500);
+            } else {
+                this.id = null;
+            }
+        },
+        start: function() {
+            if (!this.id && this.onChangeCallbacks.length) {
+                this.prevUrl = location.href;
+                this.id = setTimeout(() => this.loop, 500);
+            }
+        },
+
+        onChangeCallbacks: [],
+        addOnChange: function(cb) {
+            let i = 0;
+            while (this.onChangeCallbacks[i] != null) i++;
+            this.onChangeCallbacks[i] = cb;
+            this.start();
+            return i;
+        },
+        onChange: function() {
+            this.onChangeCallbacks.forEach(cb => {
+                if (cb) cb();
+            });
+        },
+        removeOnChange: function(i) {
+            this.onChangeCallbacks[i] = null;
+        },
+    };
+
+
     // =======
     // Modules
     // =======
@@ -120,6 +160,7 @@ const settingsDescriptor = {
             this.element = cr('div');
             container.appendChild(this.element);
             this.items = [];
+            this.constructor.i = this;
         }
         addItem(item) {
             this.items.push(item);
@@ -143,9 +184,9 @@ const settingsDescriptor = {
         }
         onKey(ev) { ev.preventDefault(); }
         static registerSettings(defaultEnabled=false, moduleKeys=null, moduleSettings=null) {
-            settingsDescriptor.ytsb[2].enabledModules[2].push(this.name);
+            settingsDescriptor.ytsb[2].enabledModules[2].push(this.rName);
             if (defaultEnabled)
-                settingsDescriptor.ytsb[2].enabledModules[3].push(this.name);
+                settingsDescriptor.ytsb[2].enabledModules[3].push(this.rName);
             if (moduleKeys)
                 Object.assign(settingsDescriptor.ytsb[2].keybinds[2], moduleKeys);
             if (moduleSettings)
@@ -296,6 +337,9 @@ const settingsDescriptor = {
     //   :24 -> 24s
     //   19 -> 19m
     //   1: -> 1h
+    //   t2 -> second trim (if mTrim is enabled)
+    //   n  -> first note (if mNotes is enabled)
+    //   n5 -> fifth note (if mNotes is enabled)
     //   You may use a literal space (' ') instead of colon (':').
     //
     mModule.mGoToTimestamp = class mGoToTimestamp extends mModule {
@@ -324,6 +368,17 @@ const settingsDescriptor = {
                     t[['s','m','h'].indexOf(res[2])] = +res[1];
             } else if (/^[0-5]?[0-9][: ]$/.test(str)) { // 07:,1: (implied hours)
                 t[2] = +str.substr(0, str.length-1);
+            } else if (/^[nt][0-9]*$/.test(str)) { // notes and trims
+                let [,target,index] = /^([nt])([1-9]?[0-9]*)$/.exec(str);
+                if (!index) index = 1;
+                if (target === 'n') {
+                    if (mModule.mNotes.i)
+                        mModule.mNotes.i.goToNote(index-1);
+                } else {
+                    if (mModule.mTrim.i)
+                        mModule.mTrim.i.goToTrim(index-1);
+                }
+                return;
             } else { // 01:02:03,02:03,03 (normal)
                 t = str.split(/[: ]/).reverse().map(n => +n);
             }
@@ -335,8 +390,8 @@ const settingsDescriptor = {
             if (this.prompt) return this.closePrompt();
             this.prompt = cr('div', { className:'ytbc-p' });
             const input = cr('input', { type:'text', autofill:'off', size:1 });
-            const allowedTimestamp = /^([0-5]?[0-9](([: ][0-5]?[0-9]){0,2}|[hms: ]))|([: ][0-5]?[0-9])$/;
-            const badCharacters = /[^0-9: hms]/g;
+            const allowedTimestamp = /^([0-5]?[0-9](([: ][0-5]?[0-9]){0,2}|[hms: ]))|([: ][0-5]?[0-9])|[nt]|([nt][1-9][0-9]*)$/;
+            const badCharacters = /[^0-9: hmsnt]/g;
             input.addEventListener('input', ev => {
                 let r;
                 if (ev.inputType === 'insertFromPaste' && (r = /^https:\/\/(?:youtu\.be\/|www\.youtube\.com\/watch\?v=)[a-zA-Z0-9]*[?&]t=([^&]*)/.exec(input.value))) {
@@ -480,9 +535,9 @@ const settingsDescriptor = {
 
 
 
-    // =====================
+    // ===============
     // Progress Module
-    // =====================
+    // ===============
     //
     // - Print the video progress as percentage.
     // TODO: Add 'minimum' format that shows the biggest unit (eg. 2h, 5m or 10s)
@@ -526,13 +581,13 @@ const settingsDescriptor = {
                     newValue = Math.round(Video.v.currentTime);
                     if (newValue === this.oldValue)
                         return;
-                    newValue = this.oldValue = this.units.map(v => { const nv=Math.floor(newValue/v); newValue%=v; return nv < 10 ? `0${nv}` : nv; }).join(':');
+                    newValue = this.oldValue = secondsToHms(newValue, true, this.units);
                     break;
                 case 'timeleft':
                     newValue = Math.round(Video.v.duration - Video.v.currentTime);
                     if (newValue === this.oldValue)
                         return;
-                    newValue = this.oldValue = this.units.map(v => { const nv=Math.floor(newValue/v); newValue%=v; return nv < 10 ? `0${nv}` : nv; }).join(':');
+                    newValue = this.oldValue = secondsToHms(newValue, true, this.units);
                     break;
                 default:
                     return;
@@ -617,6 +672,10 @@ const settingsDescriptor = {
                 }
             }
             this.trim.element.innerText = `T${this.trims.length || ''}`;
+        }
+        goToTrim(index) {
+            if (this.trims[index])
+                Video.v.currentTime = this.trims[index][0];
         }
         handleOnClick() {
             const currentTime = Video.v.currentTime;
@@ -814,7 +873,7 @@ const settingsDescriptor = {
     // TODO: Add better styling on note marker (on hover: color, resize, pointer)
     // TODO: Add popup to list all notes on current video
     //
-    mModule.mNotes = class mTrim extends mModule {
+    mModule.mNotes = class mNotes extends mModule {
         constructor() {
             super();
             this.note = this.addItem(new mItemBtn(this, 'N', 'Note'));
@@ -872,14 +931,17 @@ const settingsDescriptor = {
             const save = cr('button', { innerText:'Save', onclick:()=>{ this.saveNote(note, inp.value); close(); } });
             this.popup.appendChild(inp);
             this.popup.appendChild(save);
-            if (note[1].length) {
-                this.popup.appendChild(cr('button', { innerText:'Remove', onClick:()=>{ this.saveNote(note, ''); close(); } }));
-            }
+            if (note[1].length)
+                this.popup.appendChild(cr('button', { innerText:'Remove', onclick:()=>{ this.saveNote(note, ''); close(); } }));
             this.popup.appendChild(cancel);
-            this.popup.style.top = scrollY + document.querySelector('.title').getBoundingClientRect().top + 'px';
-            this.popup.style.left = (note[0] / Video.v.duration * 80 + 10) + '%';
+            this.popup.style.top = scrollY + title.getBoundingClientRect().top + 'px';
+            this.popup.style.left = (note[0] / Video.v.duration * 88 + 6) + '%';
             document.body.appendChild(this.popup);
             inp.focus();
+        }
+        goToNote(index) {
+            if (this.notes[index])
+                Video.v.currentTime = this.notes[index][0];
         }
         handleOnClick() {
             // TODO: Check if there already is a note at current time before creating a new one
@@ -940,16 +1002,38 @@ const settingsDescriptor = {
     //
     // - Save video metadata: title, uploader, upload date, view count, likes, dislikes
     // - If history module is enabled, last watch date will most likely be last time metadata was updated
+    // TODO: Make module fill in info for deleted videos in lists
+    // TODO: Option to add metadata from videos in list when viewing list page
     //
     mModule.mMetadata = class mMetadata extends mModule {
         constructor() {
             super();
-            this.onChangeId = Video.addOnChange(() => this.onChange());
-            this.onChange();
+            this.onVideoChangeId = Video.addOnChange(() => this.onVideoChange());
+            this.onPageChangeId = Page.addOnChange(() => this.onPageChange());
+            this.onVideoChange();
         }
-        onChange() {
+        onVideoChange() {
             if (Video.id && Video.id != Video.prevId)
-                setTimeout(() => this.saveMetadata(), 10);
+                setTimeout(() => this.saveMetadata(), 500); // FIXME: Gives time for elements to update in DOM, should rather check with a loop than doing it like this
+        }
+        onPageChange() {
+            console.log('Page change')
+            if (settings.modules.mMetadata.playlists && location.pathname === '/playlist') {
+                console.log('doing in 500ms')
+                setTimeout(() => {
+                    qa('#meta.ytd-playlist-video-renderer').forEach(el => {
+                        const id = /v=([a-zA-Z0-9]*)/.exec(el.parentElement.href)[1];
+                        const prev = GM_getValue(`m-${id}`);
+                        if (!prev) {
+                            // TODO: Check if video is privated
+                            GM_setValue(`m-${id}`, {
+                                title: el.querySelector('#video-title').innerText,
+                                uploaderName: el.querySelector('#metadata').innerText
+                            });
+                        }
+                    });
+                }, 500); // TODO: Verify that the playlist is still loaded, and use an interval instead to find metadata, including when scrolling down
+            }
         }
         saveMetadata() {
             GM_setValue(`m-${Video.id}`, {
@@ -966,7 +1050,9 @@ const settingsDescriptor = {
             GM_setValue(`m-${Video.id}`, null);
         }
         static registerSettings() {
-            super.registerSettings();
+            super.registerSettings(false, null, ['Metadata', 'section', {
+                playlists: ['Process playlists', 'checkbox', true]
+            }]); //[{ path:['/', 'ytsb', 'enabledModules'], eval:v=>-1<v.indexOf('Metadata'), action:'hide' }]
         }
     };
     mModule.mMetadata.rName = 'Metadata';
@@ -1073,6 +1159,8 @@ const settingsDescriptor = {
     // Init
     // ====
     let title, container;
+
+    Page.start();
 
     function init() {
         container = cr('div', { className:'ytbc' });
