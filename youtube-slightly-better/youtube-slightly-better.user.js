@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.47
+// @version      1.48
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -26,6 +26,7 @@
 //        - Trim module resets the first time if "loop" is enabled, but the next time it doesn't stop at trim end
 //        - Can't seem to start trim at start of video?
 //        - Remake trim module, create a new bar collection below controls, but perhaps still on video, where all bars are collected
+//        - Add module: quick-replay (mark a start and stop to replay, one more click clears)
 
 
 // =============
@@ -50,9 +51,13 @@ const settingsDescriptor = {
     const cr = (type, obj) => Object.assign(document.createElement(type), obj || {});
     const q = sel => document.querySelector(sel);
     const qa = sel => document.querySelectorAll(sel);
-    const secondsToHms = (sec, dyn=true, units=null) => {
+    const secondsToHms = (sec, dyn=true, units=null, millis=true) => {
         if (!units) units = dyn && Video.v.duration < 3600 ? [60,1] : [3600,60,1];
-        return units.map(v => { const nv=Math.floor(sec/v); sec%=v; return nv < 10 ? `0${nv}` : nv; }).join(':');
+        return units.map(v => { const nv=Math.floor(sec/v); sec%=v; return nv < 10 ? `0${nv}` : nv; }).join(':') + (millis && 0 < sec ? `.${sec.toFixed(3).substring(2)}` : '');
+    };
+    const hmsToSeconds = str => {
+        const t = str.split(/[: ]/).reverse().map(n => +n);
+        return (t[0]||0) + (t[1]||0) * 60 + (t[2]||0) * 3600;
     };
 
 
@@ -149,6 +154,15 @@ const settingsDescriptor = {
         removeOnChange: function(i) {
             this.onChangeCallbacks[i] = null;
         },
+    };
+
+
+
+    // ======================
+    // Custom bar below video
+    // ======================
+    const Bar = {
+        
     };
 
 
@@ -341,6 +355,8 @@ const settingsDescriptor = {
     //   n  -> first note (if mNotes is enabled)
     //   n5 -> fifth note (if mNotes is enabled)
     //   You may use a literal space (' ') instead of colon (':').
+    //   Adding + or - before time will seek relative to current time.
+    // TODO: Add - and + to move backwards and forwards by amount
     //
     mModule.mGoToTimestamp = class mGoToTimestamp extends mModule {
         constructor() {
@@ -359,7 +375,11 @@ const settingsDescriptor = {
                 this.handleOnClick();
         }
         goToTimestamp(str) {
-            let t = [];
+            let t = [], rel = 0;
+            if (/^[-+]/.test(str)) {
+                rel = str[0] === '-' ? -1 : 1;
+                str = str.substring(1);
+            }
             if (/^[0-5]?[0-9]$/.test(str)) { // 20,30,35 (implied minutes)
                 t[1] = +str;
             } else if (/^([0-9]+[hms])+$/.test(str)) { // 19h,20m,21s,20m21s (specified unit or units)
@@ -382,16 +402,18 @@ const settingsDescriptor = {
             } else { // 01:02:03,02:03,03 (normal)
                 t = str.split(/[: ]/).reverse().map(n => +n);
             }
-            const s = (t[0]||0) + (t[1]||0) * 60 + (t[2]||0) * 3600;
-            if (s < Video.v.duration)
-                Video.v.currentTime = s;
+            let secs = (t[0]||0) + (t[1]||0) * 60 + (t[2]||0) * 3600;
+            if (rel !== 0)
+                secs = Math.max(Video.v.currentTime + secs * rel, 0);
+            if (secs < Video.v.duration)
+                Video.v.currentTime = secs;
         }
         openPrompt() {
             if (this.prompt) return this.closePrompt();
             this.prompt = cr('div', { className:'ytbc-p' });
             const input = cr('input', { type:'text', autofill:'off', size:1 });
-            const allowedTimestamp = /^([0-5]?[0-9](([: ][0-5]?[0-9]){0,2}|[hms: ]))|([: ][0-5]?[0-9])|[nt]|([nt][1-9][0-9]*)$/;
-            const badCharacters = /[^0-9: hmsnt]/g;
+            const allowedTimestamp = /^([+-]?[0-5]?[0-9](([: ][0-5]?[0-9]){0,2}|[hms: ]))|([+-]?[: ][0-5]?[0-9])|[nt]|([nt][1-9][0-9]*)$/;
+            const badCharacters = /[^0-9: hmsnt+-]/g;
             input.addEventListener('input', ev => {
                 let r;
                 if (ev.inputType === 'insertFromPaste' && (r = /^https:\/\/(?:youtu\.be\/|www\.youtube\.com\/watch\?v=)[a-zA-Z0-9]*[?&]t=([^&]*)/.exec(input.value))) {
@@ -400,11 +422,9 @@ const settingsDescriptor = {
                     input.value = input.value.replace(badCharacters, '');
                 input.setAttribute('size', input.value.length || 1);
                 if (allowedTimestamp.test(input.value)) {
-                    input.style.backgroundColor = '#3cd23a8c';
-                    input.style.color = '#0c3511';
+                    Object.assign(input.style, { backgroundColor:'#3cd23a8c', color:'#0c3511' });
                 } else {
-                    input.style.backgroundColor = '#d019108c';
-                    input.style.color = '#350505';
+                    Object.assign(input.style, { backgroundColor:'#d019108c', color:'#350505' });
                 }
             });
             input.addEventListener('keypress', ev => {
@@ -643,8 +663,7 @@ const settingsDescriptor = {
                     trim.style.left = start / Video.v.duration * 100 + '%';
                     trim.style.width = (end - start) / Video.v.duration * 100 + '%';
                     trim.style.backgroundColor = '#dd2fe0';
-                    let prevClick = 0;
-                    let id;
+                    let id, prevClick = 0;
                     trim.onclick = () => {
                         clearTimeout(id);
                         if (Date.now() < prevClick + 200) {
@@ -663,11 +682,8 @@ const settingsDescriptor = {
                 this.trims.forEach((pair, i) => drawTrim(...pair, i));
                 if (this.current) {
                     const curr = document.createElement('div');
-                    curr.style.height = '200%';
-                    curr.style.position = 'absolute';
-                    curr.style.left = this.current / Video.v.duration * 100 + '%';
-                    curr.style.width = '2px';
-                    curr.style.backgroundColor = '#40fdd1';
+                    const left = this.current / Video.v.duration * 100 + '%';
+                    Object.assign(curr.style, { height:'200%', position:'absolute', width:'2px', backgroundColor:'#40fdd1', left });
                     this.trimBar.appendChild(curr);
                 }
             }
@@ -809,6 +825,8 @@ const settingsDescriptor = {
     // ====================
     //
     // - Make media keys (next, previous) work in browsers where they don't
+    // TODO: Make mediaSession status work
+    // TODO: Add option make next and previous hop to notes before of next/prev video
     //
     mModule.mMediaSession = class mMediaSession extends mModule {
         constructor() {
@@ -922,9 +940,9 @@ const settingsDescriptor = {
         editNote(note) {
             const close = () => { this.popup.remove(); this.popup = null; }
             if (this.popup) close();
-            this.popup = cr('div', { className:'ytsb-popup', innerText:note[0] }); // TODO: Format HH:MM:SS from note[0] timestamp
+            this.popup = cr('div', { className:'ytsb-popup', innerText:secondsToHms(note[0]) });
             const inp = cr('textarea', { innerText:note[1], onkeydown:ev=>{
-                if      (ev.key === 'Escape')              { close(); }
+                if      (ev.key === 'Escape')              { close(); } // TODO: Don't close window if there are changes
                 else if (ev.key === 'Enter' && ev.ctrlKey) { this.saveNote(note, inp.value); close(); }
             }});
             const cancel = cr('button', { innerText:'Cancel', onclick:()=>{ close(); } });
@@ -940,8 +958,10 @@ const settingsDescriptor = {
             inp.focus();
         }
         goToNote(index) {
-            if (this.notes[index])
+            if (index < this.notes.length) {
+                this.notes.sort((a, b) => a[0] - b[0]);
                 Video.v.currentTime = this.notes[index][0];
+            }
         }
         handleOnClick() {
             // TODO: Check if there already is a note at current time before creating a new one
