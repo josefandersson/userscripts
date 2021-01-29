@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.48
+// @version      1.49
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -147,6 +147,7 @@ const settingsDescriptor = {
             return i;
         },
         onChange: function() {
+            Bar.clear();
             this.onChangeCallbacks.forEach(cb => {
                 if (cb) cb();
             });
@@ -161,9 +162,112 @@ const settingsDescriptor = {
     // ======================
     // Custom bar below video
     // ======================
+    // TODO: Bar items should have a css min-width of ~4px, thus if stop is not set the width will still be good
+    // TODO: Set bar style.display = 'none' when no items
+    const FALLBACK_WIDTH = 4, GROUP_HEIGHT = 2, DOUBLE_CLICK_MS = 250;
     const Bar = {
-        
+        el: null,
+        items: [], // [BarItem,...]
+        lowestGroup: 0,
+        addItem: function(item) {
+            this.items.push(item);
+            this.calculateDimensions();
+            this.el.appendChild(item.el);
+        },
+        calculateDimensions: function() {
+            if (this.items.length) {
+                this.lowestGroup = this.items[0].group;
+                let heights = [];
+                this.items.forEach(item => {
+                    if (item.group < this.lowestGroup) this.lowestGroup = item.group;
+                    if (!heights[item.group] || heights[item.group] < item.height) heights[item.group] = item.height;
+                });
+                this.height = heights.filter(v => v != null).reduce((p, c) => p + c, 0);
+            } else {
+                this.lowestGroup = 0;
+                this.height = 0;
+            }
+            if (!this.el)
+                this.createElement();
+            Object.assign(this.el.style, { height:`${this.height}px` });
+        },
+        clear: function() {
+            this.items.length = 0;
+            this.el.children.forEach(c => c.remove());
+        },
+        createElement: function() {
+            // As long as there is a bar !overlay! then .ytp-chrome-bottom should have hegiht of ~50px and .ytp-progress-bar-container should have bottom=bottom+height of the former
+            // In thetre mode: #columns can be moved down to make space for the bar, or put bar as prev sibling of that element to make space
+            // Alternative: would be possible to put bar in #player-theater-container to overlay video and hide with controls
+            const bar = cr('div', { className:'ytsb-bar' });
+            bar.appendChild(this.el = cr('div'));
+            // this.el.style.top = `-${this.lowestGroup*GROUP_HEIGHT}px`;
+            const cols = q('#columns');
+            cols.parentElement.insertBefore(bar, cols);
+        },
+        removeItem: function(item) {
+            item.el.remove();
+            this.items.splice(this.items.indexOf(item), 1);
+            this.calculateDimensions();
+        }
     };
+
+    class BarItem {
+        constructor({ color='red', doubleClicks=false, group=0, height=9, onClick, start, stop=null, text='' }={}) {
+            this.doubleClicks = doubleClicks;
+            this.group = group;
+            this.onClick = onClick;
+            this.text = text;
+
+            this.createElement();
+            this.setColor(color);
+            this.setHeight(height);
+            this.setStartStop(start, stop);
+        }
+        createElement() {
+            this.el = cr('div', { title:this.text });
+            let tid, prevClick;
+            const handler = ev => {
+                ev.preventDefault();
+                if (this.doubleClicks) {
+                    clearTimeout(tid);
+                    const now = Date.now();
+                    if (now < prevClick + 200) {
+                        this.onClick(ev.button, true);
+                    } else {
+                        prevClick = now;
+                        tid = setTimeout(() => this.onclick(ev.button), DOUBLE_CLICK_MS);
+                    }
+                } else {
+                    this.onClick(ev.button);
+                }
+            };
+            this.el.oncontextmenu = handler;
+            this.el.onclick = handler;
+            this.el.onmouseenter = () => {
+                // TODO: Show hover popup with this.text
+            };
+        }
+        setColor(color) {
+            this.el.style.backgroundColor = this.color = color;
+        }
+        setHeight(height) {
+            this.el.style.height = `${this.height = height}px`;
+        }
+        // start and stop in 0.0-1.0
+        setStartStop(start, stop=null) {
+            this.start = start;
+            this.stop = stop;
+            if (stop == null) {
+                this.offset = -FALLBACK_WIDTH / 2;
+                this.width = 0;
+            } else {
+                this.offset = 0;
+                this.width = (stop - start);
+            }
+            Object.assign(this.el.style, { left:`calc(${start*100}% + ${this.offset}px)`, width:`${this.width*100}%` });
+        }
+    }
 
 
     // =======
@@ -729,10 +833,7 @@ const settingsDescriptor = {
             if (!this.trimBar) {
                 const buttons = document.querySelector('.ytp-chrome-controls');
                 this.trimBar = document.createElement('div');
-                this.trimBar.style.height = '2px';
-                this.trimBar.style.transform = 'translateY(-38px)';
-                this.trimBar.style.backgroundColor = '#bf79ff40';
-                this.trimBar.style.display = 'none';
+                Object.assign(this.trimBar.style, { height:'2px', transform:'translateY(-38px)', backgroundColor:'#bf79ff40', display:'none' });
                 buttons.parentElement.appendChild(this.trimBar);
             }
             this.current = null;
@@ -900,40 +1001,26 @@ const settingsDescriptor = {
             Video.addOnChange(() => this.onChange());
             Video.v.addEventListener('timeupdate', ev => this.onTimeUpdate(ev));
             this.notes = []; // Contains arrays with [timestamp (seconds), text]
+            this.barItems = [];
             this.onChange();
         }
         drawNotes() {
-            if (!this.notes.length) {
-                if (this.notesBar)
-                    this.notesBar.style.display = 'none';
-            } else {
-                if (!this.notesBar) {
-                    this.notesBar = cr('div', { className:'ytsb-notes' });
-                    q('#player-theater-container').appendChild(this.notesBar);
-                }
-                this.notesBar.style.display = 'block';
-                [...this.notesBar.children].forEach(c => c.remove());
-                const drawNote = (note) => {
-                    const el = document.createElement('div');
-                    el.style.height = '100%';
-                    el.style.position = 'absolute';
-                    el.style.left = note[0] / Video.v.duration * 100 + '%';
-                    el.style.width = '6px';
-                    el.style.backgroundColor = '#547';
-                    el.title = note[1];
-                    let prevClick = 0, tid;
-                    el.onclick = () => {
-                        clearTimeout(tid);
-                        if (Date.now() < prevClick + 200) {
-                            this.editNote(note);
-                        } else {
-                            prevClick = Date.now();
-                            tid = setTimeout(() => Video.v.currentTime = note[0], 200);
-                        }
-                    };
-                    this.notesBar.appendChild(el);
+            if (this.notes.length) {
+                const drawNote = (note, i) => {
+                    const start = note[0] / Video.v.duration;
+                    if (this.barItems[i] == null) {
+                        this.barItems[i] = new BarItem({ color:'#546', group:1, height:11, onClick:(btn) => {
+                            switch (btn) {
+                                case 0: Video.v.currentTime = note[0]; break;
+                                case 2: this.editNote(note);           break;
+                            }
+                        }, start, text:note[1] });
+                        Bar.addItem(this.barItems[i]);
+                    } else {
+                        this.barItems[i].setStartStop(start);
+                    }
                 };
-                this.notes.forEach(note => drawNote(note));
+                this.notes.forEach(drawNote);
             }
             this.note.element.innerText = `N${this.notes.length || ''}`;
         }
@@ -985,12 +1072,18 @@ const settingsDescriptor = {
             const next = this.notes.find(trim => Video.v.currentTime < trim[1]);
             this.nextSkip = next ? next[1] : null;
         }
-        saveNote(note, newText) { // empty newText removes note
-            if (this.notes.indexOf(note) !== -1) {
+        // Empty newText removes the note
+        saveNote(note, newText) { // TODO: add newTime for moving timestamp, also call note[2].setStartStop() with new timestamp
+            let i;
+            if ((i = this.notes.indexOf(note)) !== -1) {
                 if (newText.length) {
                     note[1] = newText;
                 } else {
-                    this.notes.splice(this.notes.indexOf(note), 1);
+                    if (this.barItems[i]) {
+                        Bar.removeItem(this.barItems[i]);
+                        this.barItems.splice(i, 1);
+                    }
+                    this.notes.splice(i, 1);
                 }
             } else if (newText.length) {
                 note[1] = newText;
@@ -1172,7 +1265,10 @@ const settingsDescriptor = {
 .ytbc-p>input:focus{outline:none;}
 .ytsb-popup{position:absolute;background-color:#333;width:250px;display:grid;font-size:16px;
     padding:5px;text-align:center;color:white;z-index:1000;}
-.ytsb-notes{position:absolute;bottom:-11px;left:11px;right:11px;height:11px;}`);
+.ytsb-bar{margin-left:11px;margin-right:11px;}
+.ytsb-bar{position:relative;}
+.ytsb-bar>div>div{position:absolute;min-width:6px;cursor:pointer;}
+.ytsb-bar>div>div:hover{padding:0 2px 2px 0;margin:-1px 0 0 -1px;}`);
 
 
     // ====
