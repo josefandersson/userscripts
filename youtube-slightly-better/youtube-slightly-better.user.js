@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.49
+// @version      1.50
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -54,10 +54,6 @@ const settingsDescriptor = {
     const secondsToHms = (sec, dyn=true, units=null, millis=true) => {
         if (!units) units = dyn && Video.v.duration < 3600 ? [60,1] : [3600,60,1];
         return units.map(v => { const nv=Math.floor(sec/v); sec%=v; return nv < 10 ? `0${nv}` : nv; }).join(':') + (millis && 0 < sec ? `.${sec.toFixed(3).substring(2)}` : '');
-    };
-    const hmsToSeconds = str => {
-        const t = str.split(/[: ]/).reverse().map(n => +n);
-        return (t[0]||0) + (t[1]||0) * 60 + (t[2]||0) * 3600;
     };
 
 
@@ -162,8 +158,7 @@ const settingsDescriptor = {
     // ======================
     // Custom bar below video
     // ======================
-    // TODO: Bar items should have a css min-width of ~4px, thus if stop is not set the width will still be good
-    // TODO: Set bar style.display = 'none' when no items
+    // TODO: Make items moveable by dragging them, add a onMoved to barItems (that has to later update the new position), and a canMove or something
     const FALLBACK_WIDTH = 4, GROUP_HEIGHT = 2, DOUBLE_CLICK_MS = 250;
     const Bar = {
         el: null,
@@ -225,7 +220,7 @@ const settingsDescriptor = {
             this.setStartStop(start, stop);
         }
         createElement() {
-            this.el = cr('div', { title:this.text });
+            this.el = cr('div');
             let tid, prevClick;
             const handler = ev => {
                 ev.preventDefault();
@@ -244,9 +239,7 @@ const settingsDescriptor = {
             };
             this.el.oncontextmenu = handler;
             this.el.onclick = handler;
-            this.el.onmouseenter = () => {
-                // TODO: Show hover popup with this.text
-            };
+            this.el.onmouseenter = () => Popup.attachTo(this.el, this.text);
         }
         setColor(color) {
             this.el.style.backgroundColor = this.color = color;
@@ -268,6 +261,44 @@ const settingsDescriptor = {
             Object.assign(this.el.style, { left:`calc(${start*100}% + ${this.offset}px)`, width:`${this.width*100}%` });
         }
     }
+
+
+
+    // =====================
+    // Popup hovering window
+    // =====================
+    const OFFSET_Y = 10;
+    const Popup = {
+        el: null,
+        target: null,
+        attachTo: function(target, text) {
+            this.detach();
+            if (!this.el)
+                this.createElement();
+            this.el.innerText = text;
+            this.target = target;
+            target.onmouseleave = () => this.detach();
+            this.el.style.display = 'block';
+            const tarRect = target.getBoundingClientRect();
+            const elRect = this.el.getBoundingClientRect();
+            const top = (tarRect.top + tarRect.height + scrollY + OFFSET_Y) + 'px';
+            const left = (tarRect.left + tarRect.width / 2 - elRect.width / 2) + 'px';
+            Object.assign(this.el.style, { top, left });
+        },
+        createElement: function() {
+            this.el = cr('div');
+            Object.assign(this.el.style, { position:'absolute', color:'#cecece', backgroundColor:'#101010', border:'1px solid #2b2b2b', borderRadius:'4px', fontSize:'12px', padding:'8px', display:'none' });
+            document.body.appendChild(this.el);
+        },
+        detach: function() {
+            if (this.target) {
+                this.target.onmouseleave = null;
+                this.target = null;
+                this.el.style.display = 'none';
+            }
+        }
+    };
+
 
 
     // =======
@@ -1183,15 +1214,15 @@ const settingsDescriptor = {
         }
     }
     class mItemTxt extends mItem { // displays text
-        constructor(module, str, title=null) {
+        constructor(module, str, text=null) {
             super(module);
             this.element.innerText = str;
-            if (title) this.element.title = title;
+            if (text) this.element.onmouseenter = () => Popup.attachTo(this.element, text);
         }
     }
     class mItemBtn extends mItemTxt { // click handle
-        constructor(module, str, title=null) {
-            super(module, str, title);
+        constructor(module, str, text=null) {
+            super(module, str, text);
             this.element.classList.add('btn');
             this.onClickCbs = [];
             this.element.onclick = ev => this.onClick(ev);
@@ -1204,8 +1235,8 @@ const settingsDescriptor = {
         }
     }
     class mItemBtnHold extends mItemBtn { // click handle and hold handle
-        constructor(module, str, title=null, clickDelay=200, clickRate=100) {
-            super(module, str, title);
+        constructor(module, str, text=null, clickDelay=200, clickRate=100) {
+            super(module, str, text);
             this.clickDelay = clickDelay;
             this.clickRate = clickRate;
             this.element.onmousedown = ev => this.onDown(ev);
@@ -1235,8 +1266,8 @@ const settingsDescriptor = {
         onClick() { this.onClickCbs.forEach(cb => cb()); }
     }
     class mItemToggle extends mItemBtn { // togglable button
-        constructor(module, str, title=null, state=false) {
-            super(module, str, title);
+        constructor(module, str, text=null, state=false) {
+            super(module, str, text);
             this.state = state;
             this.onChangeCbs = [];
         }
