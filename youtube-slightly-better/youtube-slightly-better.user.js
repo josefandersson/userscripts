@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.50
+// @version      1.51
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -23,9 +23,6 @@
 //        - Rewrite history module, if video is replayed without reloaded add extra plays to history,
 //          use video progression every second to check playtime instead of real life time since the video can be speed up/down
 //        - Remake init and module system somewhat, so that it inits on any page, not just when video is detected, also add onEnable/onDisable for toggling modules
-//        - Trim module resets the first time if "loop" is enabled, but the next time it doesn't stop at trim end
-//        - Can't seem to start trim at start of video?
-//        - Remake trim module, create a new bar collection below controls, but perhaps still on video, where all bars are collected
 //        - Add module: quick-replay (mark a start and stop to replay, one more click clears)
 
 
@@ -57,6 +54,7 @@ const settingsDescriptor = {
     };
 
 
+
     // ======================
     // Handle key events/cmds
     // ======================
@@ -77,6 +75,7 @@ const settingsDescriptor = {
     // =============
     // Video handler
     // =============
+    // TODO: Remove Video handler, put it all in Page observer
     // - Add a video object that handles onChange instead of modules individually, along with other cross-module related functions and vars
     // TODO: When changing to some pages without a video player (settings? user profile?) we need to re-detect it when we are back to a video page
     const Video = {
@@ -111,29 +110,72 @@ const settingsDescriptor = {
 
 
 
-    // ============
-    // Page handler
-    // ============
+    // =============
+    // Page observer
+    // =============
     const Page = {
-        prevUrl: null,
-        loop: function() {
+        v: null,           // Video DOM element
+        vid: null,         // Video id (v=xxxxxxxx in URL)
+        prevId: null,      // Previous video id
+        prevUrl: null,     // Previous url
+        isTheater: false,  // Player is in theater mode
+
+        callbacks: {
+            url: [],
+            theater: [],
+        },
+
+        loopUrl: function() {
             if (location.href !== this.prevUrl) {
                 this.onChange();
                 this.prevUrl = location.href;
             }
-            if (this.onChangeCallbacks.length) {
-                this.id = setTimeout(() => this.loop, 500);
-            } else {
-                this.id = null;
-            }
-        },
-        start: function() {
-            if (!this.id && this.onChangeCallbacks.length) {
-                this.prevUrl = location.href;
-                this.id = setTimeout(() => this.loop, 500);
-            }
+            this.tidUrl = this.callbacks.url.length ? setTimeout(() => this.loopUrl, 500) : null;
         },
 
+        
+        addCallback: function(ev, cb) {
+            const cbs = this.callbacks[ev];
+            if (!cbs) throw 'unknown event: ' + ev;
+            let i = 0;
+            while (cbs[i] != null) i++;
+            cbs[i] = cb;
+
+            switch (ev) {
+                case 'url':
+                    if (!this.tidUrl && this.callbacks.url.length) {
+                        this.prevUrl = location.href;
+                        this.tidUrl = setTimeout(() => this.loopUrl, 500);
+                    }
+                    break;
+                case 'theater':
+                    const theater = document.getElementById('player-theater-container');
+                    this.isTheater = 0 < theater.children.length;
+                    this.mutObsTheater = new MutationObserver(() => {
+                        if ((0 < theater.children.length) !== this.isTheater) {
+                            this.isTheater = !this.isTheater;
+                            this.call('theater');
+                        }
+                    });
+                    this.mutObsTheater.observe(theater, { childList:true });
+                    break;
+            }
+            
+            return i;
+        },
+        call: function(ev) {
+            const cbs = this.callbacks[ev];
+            if (!cbs) throw 'unknown event: ' + ev;
+            cbs.filter(cb => cb != null).forEach(cb => cb());
+        },
+        removeCallback: function(ev, i) {
+            const cbs = this.callbacks[ev];
+            if (!cbs) throw 'unknown event: ' + ev;
+            cbs[i] = null;
+        },
+
+
+        // TODO: Remove vvvv
         onChangeCallbacks: [],
         addOnChange: function(cb) {
             let i = 0;
@@ -143,7 +185,6 @@ const settingsDescriptor = {
             return i;
         },
         onChange: function() {
-            Bar.clear();
             this.onChangeCallbacks.forEach(cb => {
                 if (cb) cb();
             });
@@ -159,6 +200,7 @@ const settingsDescriptor = {
     // Custom bar below video
     // ======================
     // TODO: Make items moveable by dragging them, add a onMoved to barItems (that has to later update the new position), and a canMove or something
+    //
     const FALLBACK_WIDTH = 4, GROUP_HEIGHT = 2, DOUBLE_CLICK_MS = 250;
     const Bar = {
         el: null,
@@ -182,28 +224,32 @@ const settingsDescriptor = {
                 this.lowestGroup = 0;
                 this.height = 0;
             }
-            if (!this.el)
-                this.createElement();
+            this.ensureElement();
+            // TODO: Move items vertically if they collide
             Object.assign(this.el.style, { height:`${this.height}px` });
         },
         clear: function() {
             this.items.length = 0;
-            this.el.children.forEach(c => c.remove());
+            this.el?.children.forEach(c => c.remove()); // TODO: This isn't working "forEach not a function"
         },
         createElement: function() {
-            // As long as there is a bar !overlay! then .ytp-chrome-bottom should have hegiht of ~50px and .ytp-progress-bar-container should have bottom=bottom+height of the former
-            // In thetre mode: #columns can be moved down to make space for the bar, or put bar as prev sibling of that element to make space
-            // Alternative: would be possible to put bar in #player-theater-container to overlay video and hide with controls
-            const bar = cr('div', { className:'ytsb-bar' });
-            bar.appendChild(this.el = cr('div'));
-            // this.el.style.top = `-${this.lowestGroup*GROUP_HEIGHT}px`;
-            const cols = q('#columns');
-            cols.parentElement.insertBefore(bar, cols);
+            this.elParent = cr('div', { className:'ytsb-bar' });
+            this.elParent.appendChild(this.el = cr('div'));
+            Page.addCallback('theater', () => this.reorderElement());
+            this.reorderElement();
+        },
+        ensureElement: function() {
+            if (!this.el)
+                this.createElement();
         },
         removeItem: function(item) {
             item.el.remove();
             this.items.splice(this.items.indexOf(item), 1);
             this.calculateDimensions();
+        },
+        reorderElement: function() {
+            const prevSibling = Page.isTheater ? q('#columns') : q('#info');
+            prevSibling.parentElement.insertBefore(this.elParent, prevSibling);
         }
     };
 
@@ -239,13 +285,17 @@ const settingsDescriptor = {
             };
             this.el.oncontextmenu = handler;
             this.el.onclick = handler;
-            this.el.onmouseenter = () => Popup.attachTo(this.el, this.text);
+            this.el.onmouseenter = () => Popup.create({ target:this.el, text:this.text });
+        }
+        remove() {
+            Bar.removeItem(this);
         }
         setColor(color) {
             this.el.style.backgroundColor = this.color = color;
         }
         setHeight(height) {
             this.el.style.height = `${this.height = height}px`;
+            Bar.calculateDimensions();
         }
         // start and stop in 0.0-1.0
         setStartStop(start, stop=null) {
@@ -259,6 +309,7 @@ const settingsDescriptor = {
                 this.width = (stop - start);
             }
             Object.assign(this.el.style, { left:`calc(${start*100}% + ${this.offset}px)`, width:`${this.width*100}%` });
+            Bar.calculateDimensions();
         }
     }
 
@@ -269,34 +320,48 @@ const settingsDescriptor = {
     // =====================
     const OFFSET_Y = 10;
     const Popup = {
-        el: null,
-        target: null,
-        attachTo: function(target, text) {
-            this.detach();
-            if (!this.el)
-                this.createElement();
-            this.el.innerText = text;
-            this.target = target;
-            target.onmouseleave = () => this.detach();
-            this.el.style.display = 'block';
-            const tarRect = target.getBoundingClientRect();
-            const elRect = this.el.getBoundingClientRect();
-            const top = (tarRect.top + tarRect.height + scrollY + OFFSET_Y) + 'px';
-            const left = (tarRect.left + tarRect.width / 2 - elRect.width / 2) + 'px';
-            Object.assign(this.el.style, { top, left });
-        },
-        createElement: function() {
-            this.el = cr('div');
-            Object.assign(this.el.style, { position:'absolute', color:'#cecece', backgroundColor:'#101010', border:'1px solid #2b2b2b', borderRadius:'4px', fontSize:'12px', padding:'8px', display:'none' });
-            document.body.appendChild(this.el);
-        },
-        detach: function() {
-            if (this.target) {
-                this.target.onmouseleave = null;
-                this.target = null;
-                this.el.style.display = 'none';
+        positionPopup: function(popup, left, top, centerX=false, centerY=false, popRect=null) {
+            if (!popRect) {
+                popup.style.display = 'block';
+                popRect = popup.getBoundingClientRect();
             }
-        }
+            if (centerX) left = `calc(${left} - ${popRect.width/2}px)`;
+            if (centerY) top = `calc(${top} - ${popRect.height/2}px)`;
+            // TODO: Use popRect to make sure popup does not end up outside of the doc
+            Object.assign(popup.style, { left, top });
+        },
+        positionPopupTo: function(popup, target, centerX=false, centerY=false) {
+            popup.style.display = 'block';
+            const tarRect = target.getBoundingClientRect();
+            const popRect = popup.getBoundingClientRect();
+            const left = (tarRect.left + tarRect.width / 2 - popRect.width / 2) + 'px';
+            const top = (tarRect.top + tarRect.height + scrollY + OFFSET_Y) + 'px';
+            this.positionPopup(popup, left, top, centerX, centerY, popRect);
+        },
+
+        /** Create a popup window with text or a child element.
+         *  If sticky=false then window will be removed when mouse leaves target
+         *  Returns popup element
+         */
+        create: function({ centerX=false, centerY=false, childElement=null, inBar=false, left=null, sticky=false, target=null, text=null, top=null }={}) {
+            const popup = cr('div', { className:'ytsb-popup' });
+            if (inBar) {
+                Bar.ensureElement();
+                Bar.el.appendChild(popup);
+            } else document.body.appendChild(popup);
+            if (childElement != null) popup.appendChild(childElement);
+            else                      popup.innerText = text;
+            if (target != null) {
+                this.positionPopupTo(popup, target, centerX, centerY);
+                if (!sticky) target.onmouseleave = () => popup.remove();
+            } else if (left != null && top != null) {
+                this.positionPopup(popup, left, top, centerX, centerY);
+            } else {
+                popup.remove();
+                return null;
+            }
+            return popup;
+        },
     };
 
 
@@ -772,6 +837,9 @@ const settingsDescriptor = {
     // - One trim fully within another trim will untrim (skip) that part of the parent trim
     // - When trims overlap but aren't fully within, the trims will add together
     // - TODO: Use video speed in calculating next trim, also recalc when video speed changes
+    //   TODO: Before skipping to end of video/next vid after trim, check if video is on repeat, if so, seek to first trim again
+    //   TODO: Can't seem to start trim at start of video?
+    //   TODO: Redo whole module with use Bar
     //
     mModule.mTrim = class mTrim extends mModule {
         constructor() {
@@ -792,6 +860,18 @@ const settingsDescriptor = {
                 this.trimBar.style.display = 'block';
                 [...this.trimBar.children].forEach(c => c.remove());
                 const drawTrim = (start, end, i) => {
+                    // Bar.addItem(new BarItem({ color:'#aa3', height:'5px', onClick:btn => {
+                    //     switch (btn) {
+                    //         case 0:
+                    //             Video.v.currentTime = start;
+                    //             break;
+                    //         case 1:
+                    //             this.trims.splice(i, 1);
+                    //             this.drawTrims();
+                    //             this.saveTrims();
+                    //             break;
+                    //     }
+                    // }, start:start/Video.v.duration, stop:end/Video.v.duration }));
                     const trim = document.createElement('div');
                     trim.style.height = '150%';
                     trim.style.position = 'absolute';
@@ -814,7 +894,7 @@ const settingsDescriptor = {
                     };
                     this.trimBar.appendChild(trim);
                 };
-                this.trims.forEach((pair, i) => drawTrim(...pair, i));
+                this.trims.forEach(drawTrim);
                 if (this.current) {
                     const curr = document.createElement('div');
                     const left = this.current / Video.v.duration * 100 + '%';
@@ -1022,6 +1102,7 @@ const settingsDescriptor = {
     // TODO: Make a custom popup window for displaying the text instead of builtin titles
     // TODO: Add better styling on note marker (on hover: color, resize, pointer)
     // TODO: Add popup to list all notes on current video
+    // TODO: Make the timestamp easy to copy with url
     //
     mModule.mNotes = class mNotes extends mModule {
         constructor() {
@@ -1035,9 +1116,9 @@ const settingsDescriptor = {
             this.barItems = [];
             this.onChange();
         }
-        drawNotes() {
+        createBarItems() {
             if (this.notes.length) {
-                const drawNote = (note, i) => {
+                const createItem = (note, i) => {
                     const start = note[0] / Video.v.duration;
                     if (this.barItems[i] == null) {
                         this.barItems[i] = new BarItem({ color:'#546', group:1, height:11, onClick:(btn) => {
@@ -1051,28 +1132,28 @@ const settingsDescriptor = {
                         this.barItems[i].setStartStop(start);
                     }
                 };
-                this.notes.forEach(drawNote);
+                this.notes.forEach(createItem);
             }
             this.note.element.innerText = `N${this.notes.length || ''}`;
         }
         editNote(note) {
             const close = () => { this.popup.remove(); this.popup = null; }
             if (this.popup) close();
-            this.popup = cr('div', { className:'ytsb-popup', innerText:secondsToHms(note[0]) });
+            const childElement = cr('div', { innerText:secondsToHms(note[0]) });
             const inp = cr('textarea', { innerText:note[1], onkeydown:ev=>{
                 if      (ev.key === 'Escape')              { close(); } // TODO: Don't close window if there are changes
                 else if (ev.key === 'Enter' && ev.ctrlKey) { this.saveNote(note, inp.value); close(); }
             }});
             const cancel = cr('button', { innerText:'Cancel', onclick:()=>{ close(); } });
             const save = cr('button', { innerText:'Save', onclick:()=>{ this.saveNote(note, inp.value); close(); } });
-            this.popup.appendChild(inp);
-            this.popup.appendChild(save);
+            childElement.appendChild(inp);
+            childElement.appendChild(save);
             if (note[1].length)
-                this.popup.appendChild(cr('button', { innerText:'Remove', onclick:()=>{ this.saveNote(note, ''); close(); } }));
-            this.popup.appendChild(cancel);
-            this.popup.style.top = scrollY + title.getBoundingClientRect().top + 'px';
-            this.popup.style.left = (note[0] / Video.v.duration * 88 + 6) + '%';
-            document.body.appendChild(this.popup);
+                childElement.appendChild(cr('button', { innerText:'Remove', onclick:()=>{ this.saveNote(note, ''); close(); } }));
+            childElement.appendChild(cancel);
+            childElement.style.display = 'grid';
+            this.popup = Popup.create({ inBar:true, childElement, centerX:true,
+                left: (note[0] / Video.v.duration * 100) + '%', top: 'calc(100% + 5px)' }); // TODO: Maybe just attachTo barItem? (create a temp one if doesn't exist) (would need some fix for percentage then tho)
             inp.focus();
         }
         goToNote(index) {
@@ -1084,12 +1165,14 @@ const settingsDescriptor = {
         handleOnClick() {
             // TODO: Check if there already is a note at current time before creating a new one
             this.editNote([Video.v.currentTime, '']);
-            this.drawNotes();
+            this.createBarItems();
         }
         onChange() {
             if (Video.id) this.notes = GM_getValue(`n-${Video.id}`, []);
             else          this.notes = [];
-            this.drawNotes();
+            this.barItems.forEach(b => b.remove());
+            this.barItems.length = 0;
+            this.createBarItems();
         }
         onKey(ev) {
             super.onKey(ev);
@@ -1123,7 +1206,7 @@ const settingsDescriptor = {
                 return;
             }
             this.saveNotes();
-            this.drawNotes();
+            this.createBarItems();
         }
         saveNotes() {
             if (Video.id)
@@ -1153,7 +1236,7 @@ const settingsDescriptor = {
         constructor() {
             super();
             this.onVideoChangeId = Video.addOnChange(() => this.onVideoChange());
-            this.onPageChangeId = Page.addOnChange(() => this.onPageChange());
+            this.onPageChangeId = Page.addCallback('url', () => this.onPageChange());
             this.onVideoChange();
         }
         onVideoChange() {
@@ -1161,9 +1244,7 @@ const settingsDescriptor = {
                 setTimeout(() => this.saveMetadata(), 500); // FIXME: Gives time for elements to update in DOM, should rather check with a loop than doing it like this
         }
         onPageChange() {
-            console.log('Page change')
             if (settings.modules.mMetadata.playlists && location.pathname === '/playlist') {
-                console.log('doing in 500ms')
                 setTimeout(() => {
                     qa('#meta.ytd-playlist-video-renderer').forEach(el => {
                         const id = /v=([a-zA-Z0-9]*)/.exec(el.parentElement.href)[1];
@@ -1217,7 +1298,7 @@ const settingsDescriptor = {
         constructor(module, str, text=null) {
             super(module);
             this.element.innerText = str;
-            if (text) this.element.onmouseenter = () => Popup.attachTo(this.element, text);
+            if (text) this.element.onmouseenter = () => Popup.create({ target:this.element, text });
         }
     }
     class mItemBtn extends mItemTxt { // click handle
@@ -1294,12 +1375,12 @@ const settingsDescriptor = {
     pointer-events:auto;position:fixed;top:50vh;left:50vw;transform:translate(-50%,-50%);
     color:#350505;background-color:#d019108c;font-size:20px;padding:10px;border:none;text-align:center;}
 .ytbc-p>input:focus{outline:none;}
-.ytsb-popup{position:absolute;background-color:#333;width:250px;display:grid;font-size:16px;
-    padding:5px;text-align:center;color:white;z-index:1000;}
+.ytsb-popup{position:absolute;color:#cecece;background-color:#101010;border:1px solid #2b2b2b;border-radius:4px;
+    display:none;font-size:12px;padding:8px;text-align:center;z-index:1000;}
 .ytsb-bar{margin-left:11px;margin-right:11px;}
 .ytsb-bar{position:relative;}
 .ytsb-bar>div>div{position:absolute;min-width:6px;cursor:pointer;}
-.ytsb-bar>div>div:hover{padding:0 2px 2px 0;margin:-1px 0 0 -1px;}`);
+.ytsb-bar>div>div:not(.ytsb-popup):hover{padding:0 2px 2px 0;margin:-1px 0 0 -1px;}`);
 
 
     // ====
@@ -1307,7 +1388,7 @@ const settingsDescriptor = {
     // ====
     let title, container;
 
-    Page.start();
+    // Page.start();
 
     function init() {
         container = cr('div', { className:'ytbc' });
