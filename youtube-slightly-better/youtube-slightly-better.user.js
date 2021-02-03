@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.51
+// @version      1.52
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -49,7 +49,7 @@ const settingsDescriptor = {
     const q = sel => document.querySelector(sel);
     const qa = sel => document.querySelectorAll(sel);
     const secondsToHms = (sec, dyn=true, units=null, millis=true) => {
-        if (!units) units = dyn && Video.v.duration < 3600 ? [60,1] : [3600,60,1];
+        if (!units) units = dyn && Page.v.duration < 3600 ? [60,1] : [3600,60,1];
         return units.map(v => { const nv=Math.floor(sec/v); sec%=v; return nv < 10 ? `0${nv}` : nv; }).join(':') + (millis && 0 < sec ? `.${sec.toFixed(3).substring(2)}` : '');
     };
 
@@ -73,56 +73,20 @@ const settingsDescriptor = {
 
 
     // =============
-    // Video handler
-    // =============
-    // TODO: Remove Video handler, put it all in Page observer
-    // - Add a video object that handles onChange instead of modules individually, along with other cross-module related functions and vars
-    // TODO: When changing to some pages without a video player (settings? user profile?) we need to re-detect it when we are back to a video page
-    const Video = {
-        v: null,      // Video DOM element
-        id: null,     // Video id (v=xxxxxxxx in URL)
-        prevId: null, // Previous video id
-
-        onChangeCallbacks: [],
-        addOnChange: function(cb) {
-            let i = 0;
-            while (this.onChangeCallbacks[i] != null) i++;
-            this.onChangeCallbacks[i] = cb;
-            return i;
-        },
-        onChange: function() {
-            this.prevId = this.id;
-            this.id = new URLSearchParams(location.search).get('v');
-            this.onChangeCallbacks.forEach(cb => {
-                if (cb) cb();
-            });
-        },
-        removeOnChange: function(i) {
-            this.onChangeCallbacks[i] = null;
-        },
-
-        setVideo: function(video) {
-            this.v = video;
-            this.v.addEventListener('loadeddata', () => this.onChange());
-            this.onChange();
-        },
-    };
-
-
-
-    // =============
     // Page observer
     // =============
+    // TODO: When changing to some pages without a video player (settings? user profile?) we need to re-detect it when we are back to a video page
     const Page = {
         v: null,           // Video DOM element
         vid: null,         // Video id (v=xxxxxxxx in URL)
-        prevId: null,      // Previous video id
+        prevVid: null,      // Previous video id
         prevUrl: null,     // Previous url
         isTheater: false,  // Player is in theater mode
 
         callbacks: {
-            url: [],
             theater: [],
+            url: [],
+            video: []
         },
 
         loopUrl: function() {
@@ -142,22 +106,24 @@ const settingsDescriptor = {
             cbs[i] = cb;
 
             switch (ev) {
+                case 'theater':
+                    if (!this.mutObsTheater) {
+                        const theater = document.getElementById('player-theater-container');
+                        this.isTheater = 0 < theater.children.length;
+                        this.mutObsTheater = new MutationObserver(() => {
+                            if ((0 < theater.children.length) !== this.isTheater) {
+                                this.isTheater = !this.isTheater;
+                                this.call('theater');
+                            }
+                        });
+                        this.mutObsTheater.observe(theater, { childList:true });
+                    }
+                    break;
                 case 'url':
                     if (!this.tidUrl && this.callbacks.url.length) {
                         this.prevUrl = location.href;
                         this.tidUrl = setTimeout(() => this.loopUrl, 500);
                     }
-                    break;
-                case 'theater':
-                    const theater = document.getElementById('player-theater-container');
-                    this.isTheater = 0 < theater.children.length;
-                    this.mutObsTheater = new MutationObserver(() => {
-                        if ((0 < theater.children.length) !== this.isTheater) {
-                            this.isTheater = !this.isTheater;
-                            this.call('theater');
-                        }
-                    });
-                    this.mutObsTheater.observe(theater, { childList:true });
                     break;
             }
             
@@ -174,23 +140,13 @@ const settingsDescriptor = {
             cbs[i] = null;
         },
 
-
-        // TODO: Remove vvvv
-        onChangeCallbacks: [],
-        addOnChange: function(cb) {
-            let i = 0;
-            while (this.onChangeCallbacks[i] != null) i++;
-            this.onChangeCallbacks[i] = cb;
-            this.start();
-            return i;
-        },
-        onChange: function() {
-            this.onChangeCallbacks.forEach(cb => {
-                if (cb) cb();
+        setVideo: function(video) {
+            this.v = video;
+            this.v.addEventListener('loadeddata', () => {
+                this.prevId = this.id;
+                this.id = new URLSearchParams(location.search).get('v');
+                this.call('video');
             });
-        },
-        removeOnChange: function(i) {
-            this.onChangeCallbacks[i] = null;
         },
     };
 
@@ -432,12 +388,12 @@ const settingsDescriptor = {
             this.faster.addOnClick(() => this.changePlaybackRate(settings.modules.mPlaybackRate.playbackRateStep));
             this.registerKeys([settings.keybinds.decreasePlaybackRate, settings.keybinds.resetPlaybackRate, settings.keybinds.increasePlaybackRate]);
         }
-        getPlaybackRateStr() { return Video.v.playbackRate.toFixed(2) + ''; }
-        changePlaybackRate(diff) { return this.setPlaybackRate(Video.v.playbackRate + diff); }
+        getPlaybackRateStr() { return Page.v.playbackRate.toFixed(2) + ''; }
+        changePlaybackRate(diff) { return this.setPlaybackRate(Page.v.playbackRate + diff); }
         setPlaybackRate(rate) {
-            Video.v.playbackRate = Math.max(settings.modules.mPlaybackRate.minPlaybackRate, Math.min(settings.modules.mPlaybackRate.maxPlaybackRate, rate));
+            Page.v.playbackRate = Math.max(settings.modules.mPlaybackRate.minPlaybackRate, Math.min(settings.modules.mPlaybackRate.maxPlaybackRate, rate));
             this.speed.element.innerText = this.getPlaybackRateStr();
-            return Video.v.playbackRate === rate;
+            return Page.v.playbackRate === rate;
         }
         onKey(ev) {
             super.onKey(ev);
@@ -485,7 +441,7 @@ const settingsDescriptor = {
             }
         }
         getThumbnailUrl() {
-            if (Video.id) return `https://img.youtube.com/vi/${Video.id}/maxresdefault.jpg`;
+            if (Page.vid) return `https://img.youtube.com/vi/${Page.vid}/maxresdefault.jpg`;
             else         return null;
         }
         onKey(ev) {
@@ -517,11 +473,11 @@ const settingsDescriptor = {
             this.registerKeys([settings.keybinds.screenshot]);
         }
         takeScreenshot() {
-            const canvas = cr('canvas', { width:Video.v.videoWidth, height:Video.v.videoHeight });
+            const canvas = cr('canvas', { width:Page.v.videoWidth, height:Page.v.videoHeight });
             const context = canvas.getContext('2d');
-            context.drawImage(Video.v, 0, 0, canvas.width, canvas.height);
+            context.drawImage(Page.v, 0, 0, canvas.width, canvas.height);
             const dataUrl = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
-            const link = cr('a', { download:`screenshot-${Video.id}.png`, href:dataUrl });
+            const link = cr('a', { download:`screenshot-${Page.vid}.png`, href:dataUrl });
             link.click();
         }
         onKey(ev) {
@@ -604,9 +560,12 @@ const settingsDescriptor = {
             }
             let secs = (t[0]||0) + (t[1]||0) * 60 + (t[2]||0) * 3600;
             if (rel !== 0)
-                secs = Math.max(Video.v.currentTime + secs * rel, 0);
-            if (secs < Video.v.duration)
-                Video.v.currentTime = secs;
+                secs = Math.max(Page.v.currentTime + secs * rel, 0);
+            if (secs < Page.v.duration) {
+                Page.v.currentTime = secs;
+                if (settings.modules.mGoToTimestamp.playAfterSeek)
+                    Page.v.play();
+            }
         }
         openPrompt() {
             if (this.prompt) return this.closePrompt();
@@ -649,7 +608,9 @@ const settingsDescriptor = {
         static registerSettings() {
             super.registerSettings(true, {
                 goToTimestamp: ['Go to timestamp', 'text', 'g']
-            });
+            },['Go To Timestamp', 'section', {
+                playAfterSeek: ['Play video after seek', 'checkbox', false]
+            }]);
         }
     };
     mModule.mGoToTimestamp.rName = 'Go To Timestamp';
@@ -669,17 +630,17 @@ const settingsDescriptor = {
             this.seen = this.addItem(new mItemBtn(this, '-', 'Prints number of times you have watched this video\nRed texts means current viewing is not yet counted\nGreen texts means number includes current viewing\nLeft-click: Add current viewing to count (make number green)'));
             this.seen.addOnClick(() => this.onClick());
             this.isPlaying = false;
-            Video.addOnChange(() => this.onChange());
-            Video.v.addEventListener('play', ev => this.onPlay(ev)); // TODO: Add videoChange event (or similar) to Video object to re-add these listeners when video element changes
-            Video.v.addEventListener('pause', ev => this.onPause(ev));
+            Page.addCallback('video', () => this.onChange());
+            Page.v.addEventListener('play', ev => this.onPlay(ev)); // TODO: Add videoChange event (or similar) to Video object to re-add these listeners when video element changes
+            Page.v.addEventListener('pause', ev => this.onPause(ev));
             this.onChange();
         }
         onChange() {
-            if (Video.id && Video.id != Video.prevId) {
+            if (Page.vid && Page.vid != Page.prevVid) {
                 this.isCounted = false; // TODO: remove
                 this.replays = 1;
                 this.startedWatchingAt = Date.now();
-                this.historyData = GM_getValue(`h-${Video.id}`, null);
+                this.historyData = GM_getValue(`h-${Page.vid}`, null);
                 if (this.historyData) {
                     this.seen.element.innerText = this.historyData.n;
                     this.seen.element.style.color = '#ff4343';
@@ -687,10 +648,10 @@ const settingsDescriptor = {
                     this.seen.element.innerText = '0';
                     this.seen.element.style.color = 'inherit';
                 }
-                this.minimumTime = settings.modules.mHistory.minPercentageBeforeSeen * Video.v.duration * 1000;
+                this.minimumTime = settings.modules.mHistory.minPercentageBeforeSeen * Page.v.duration * 1000;
                 this.onPause();
                 this.currentPlaytime = 0;
-                if (!Video.v.paused)
+                if (!Page.v.paused)
                     this.onPlay();
             }
         }
@@ -729,7 +690,7 @@ const settingsDescriptor = {
                 this.historyData.n ++;
             } else
                 this.historyData = { f:startedWatchingAt, l:startedWatchingAt, n:1 };
-            GM_setValue(`h-${Video.id}`, this.historyData);
+            GM_setValue(`h-${Page.vid}`, this.historyData);
             this.seen.element.style.color = '#4af150';
             this.seen.element.innerText = this.historyData.n;
         }
@@ -740,7 +701,7 @@ const settingsDescriptor = {
             this.replays --;
             this.historyData.l = this.previousL;
             this.historyData.n --;
-            GM_setValue(`h-${Video.id}`, this.historyData);
+            GM_setValue(`h-${Page.vid}`, this.historyData);
             this.seen.element.style.color = '#ff4343';
             this.seen.element.innerText = this.historyData.n;
         }
@@ -769,8 +730,8 @@ const settingsDescriptor = {
             this.progress.addOnClick(() => this.handleOnClick());
             this.mode = 'percentage';
             this.registerKeys([settings.keybinds.progressFormat]);
-            this.onChangeId = Video.addOnChange(() => this.onChange());
-            Video.v.addEventListener('timeupdate', () => this.updateProgression()); // TODO: Add newVideo event to Video object
+            this.onChangeId = Page.addCallback('video', () => this.onChange());
+            Page.v.addEventListener('timeupdate', () => this.updateProgression()); // TODO: Add newPlayer event to Page object
             this.onChange();
         }
         handleOnClick() {
@@ -779,7 +740,7 @@ const settingsDescriptor = {
             this.updateProgression();
         }
         onChange() {
-            this.units = Video.v.duration < 3600 ? [60,1] : [3600,60,1];
+            this.units = Page.v.duration < 3600 ? [60,1] : [3600,60,1];
             this.updateProgression();
         }
         onKey(ev) {
@@ -787,24 +748,24 @@ const settingsDescriptor = {
             this.handleOnClick();
         }
         updateProgression() {
-            if (!Video.v.duration)
+            if (!Page.v.duration)
                 return;
             let newValue;
             switch (this.mode) {
                 case 'percentage':
-                    newValue = Math.round(Video.v.currentTime / Video.v.duration * 100);
+                    newValue = Math.round(Page.v.currentTime / Page.v.duration * 100);
                     if (newValue === this.oldValue)
                         return;
                     newValue = this.oldValue = `${newValue}%`;
                     break;
                 case 'time':
-                    newValue = Math.round(Video.v.currentTime);
+                    newValue = Math.round(Page.v.currentTime);
                     if (newValue === this.oldValue)
                         return;
                     newValue = this.oldValue = secondsToHms(newValue, true, this.units);
                     break;
                 case 'timeleft':
-                    newValue = Math.round(Video.v.duration - Video.v.currentTime);
+                    newValue = Math.round(Page.v.duration - Page.v.currentTime);
                     if (newValue === this.oldValue)
                         return;
                     newValue = this.oldValue = secondsToHms(newValue, true, this.units);
@@ -847,8 +808,8 @@ const settingsDescriptor = {
             this.trim = this.addItem(new mItemBtn(this, 'T', 'Trim'));
             this.trim.addOnClick(() => this.handleOnClick());
             this.registerKeys([settings.keybinds.trim]);
-            this.onChangeId = Video.addOnChange(() => this.onChange());
-            Video.v.addEventListener('timeupdate', ev => this.onTimeUpdate(ev)); // TODO: Add newVideo event to Video obj
+            this.onChangeId = Page.addCallback('video', () => this.onChange());
+            Page.v.addEventListener('timeupdate', ev => this.onTimeUpdate(ev)); // TODO: Add newVideo event to Video obj
             this.trims = []; // Contains arrays with [startTimestamp, endTimestamp] (seconds)
             this.current = null;
             this.onChange();
@@ -863,7 +824,7 @@ const settingsDescriptor = {
                     // Bar.addItem(new BarItem({ color:'#aa3', height:'5px', onClick:btn => {
                     //     switch (btn) {
                     //         case 0:
-                    //             Video.v.currentTime = start;
+                    //             Page.v.currentTime = start;
                     //             break;
                     //         case 1:
                     //             this.trims.splice(i, 1);
@@ -871,12 +832,12 @@ const settingsDescriptor = {
                     //             this.saveTrims();
                     //             break;
                     //     }
-                    // }, start:start/Video.v.duration, stop:end/Video.v.duration }));
+                    // }, start:start/Page.v.duration, stop:end/Page.v.duration }));
                     const trim = document.createElement('div');
                     trim.style.height = '150%';
                     trim.style.position = 'absolute';
-                    trim.style.left = start / Video.v.duration * 100 + '%';
-                    trim.style.width = (end - start) / Video.v.duration * 100 + '%';
+                    trim.style.left = start / Page.v.duration * 100 + '%';
+                    trim.style.width = (end - start) / Page.v.duration * 100 + '%';
                     trim.style.backgroundColor = '#dd2fe0';
                     let id, prevClick = 0;
                     trim.onclick = () => {
@@ -888,7 +849,7 @@ const settingsDescriptor = {
                         } else {
                             prevClick = Date.now();
                             id = setTimeout(() => {
-                                Video.v.currentTime = start;
+                                Page.v.currentTime = start;
                             }, 200);
                         }
                     };
@@ -897,7 +858,7 @@ const settingsDescriptor = {
                 this.trims.forEach(drawTrim);
                 if (this.current) {
                     const curr = document.createElement('div');
-                    const left = this.current / Video.v.duration * 100 + '%';
+                    const left = this.current / Page.v.duration * 100 + '%';
                     Object.assign(curr.style, { height:'200%', position:'absolute', width:'2px', backgroundColor:'#40fdd1', left });
                     this.trimBar.appendChild(curr);
                 }
@@ -906,10 +867,10 @@ const settingsDescriptor = {
         }
         goToTrim(index) {
             if (this.trims[index])
-                Video.v.currentTime = this.trims[index][0];
+                Page.v.currentTime = this.trims[index][0];
         }
         handleOnClick() {
-            const currentTime = Video.v.currentTime;
+            const currentTime = Page.v.currentTime;
             if (this.inProximity(currentTime, this.current, TRIM_PROXIMITY)) {
                 this.current = null;
                 this.trim.element.style.color = '';
@@ -939,7 +900,7 @@ const settingsDescriptor = {
             return Math.abs(val1 - val2) < prox;
         }
         onChange() {
-            if (Video.id) this.trims = GM_getValue(`t-${Video.id}`, []);
+            if (Page.vid) this.trims = GM_getValue(`t-${Page.vid}`, []);
             else          this.trims = [];
             if (!this.trimBar) {
                 const buttons = document.querySelector('.ytp-chrome-controls');
@@ -949,10 +910,10 @@ const settingsDescriptor = {
             }
             this.current = null;
             this.trim.element.style.color = '';
-            const params = new URLSearchParams(location.search); // TODO: Add t param to Video obj
+            const params = new URLSearchParams(location.search); // TODO: Add t param to Page obj?
             if (this.trims.length && !params.get('t')) {
                 this.trims.sort((a, b) => a[0] - b[0]);
-                Video.v.currentTime = this.trims[0][0];
+                Page.v.currentTime = this.trims[0][0];
             }
             this.calculateNextSkip();
             this.drawTrims();
@@ -963,26 +924,26 @@ const settingsDescriptor = {
         }
         onTimeUpdate() {
             if (this.nextSkip) {
-                if (this.nextSkip <= Video.v.currentTime) {
+                if (this.nextSkip <= Page.v.currentTime) {
                     this.calculateNextSkip();
                     if (this.nextSkip) {
                         this.trims.sort((a, b) => a[0] - b[0]);
-                        Video.v.currentTime = this.trims.find(trim => Video.v.currentTime < trim[0])[0];
+                        Page.v.currentTime = this.trims.find(trim => Page.v.currentTime < trim[0])[0];
                     } else {
-                        Video.v.currentTime = Video.v.duration;
+                        Page.v.currentTime = Page.v.duration;
                     }
                 }
             }
         }
         calculateNextSkip() {
             this.trims.sort((a, b) => a[1] - b[1]);
-            const next = this.trims.find(trim => Video.v.currentTime < trim[1]);
+            const next = this.trims.find(trim => Page.v.currentTime < trim[1]);
             this.nextSkip = next ? next[1] : null;
         }
         saveTrims() {
             this.calculateNextSkip();
-            if (Video.id)
-                GM_setValue(`t-${Video.id}`, this.trims);
+            if (Page.vid)
+                GM_setValue(`t-${Page.vid}`, this.trims);
         }
         static registerSettings() {
             super.registerSettings(true, {
@@ -1008,10 +969,10 @@ const settingsDescriptor = {
         }
         onKey(ev) {
             super.onKey(ev);
-            if (!Video.v.duration || !Video.id) return;
-            const units = Video.v.duration < 3600 ? [60,1] : [3600,60,1];
+            if (!Page.v.duration || !Page.vid) return;
+            const units = Page.v.duration < 3600 ? [60,1] : [3600,60,1];
             const unitNms = ['s', 'm', 'h']; // TODO: Move this function to convert s to hh:mm:ss to helper functions, to be used in other modules
-            let cur = Math.round(Video.v.currentTime);
+            let cur = Math.round(Page.v.currentTime);
             const time = units.map((v, i) => {
                 const nv = Math.floor(cur/v);
                 cur %= v;
@@ -1019,7 +980,7 @@ const settingsDescriptor = {
                     return '';
                 return (nv < 10 ? `0${nv}` : nv) + unitNms[units.length-1-i];
             }).join('');
-            navigator.clipboard.writeText(`https://youtu.be/${Video.id}?t=${time}`);
+            navigator.clipboard.writeText(`https://youtu.be/${Page.vid}?t=${time}`);
         }
         static registerSettings() {
             super.registerSettings(true, {
@@ -1047,15 +1008,15 @@ const settingsDescriptor = {
             setInterval(() => {
                 // document.title = 'State: ' + navigator.mediaSession.playbackState + ' ' + data;
             }, 200);
-            if (!Video.v.paused) {
-                Video.v.pause();
-                Video.v.play();
+            if (!Page.v.paused) {
+                Page.v.pause();
+                Page.v.play();
             }
-            // TODO: Add newVideo event to Video obj to update these event listeners
-            Video.v.addEventListener('play', () => data += 'PLAY'); // TODO: If window was just created then pause the video, then play video when window gains focus
-            Video.v.addEventListener('pause', () => data += 'PAUS');
-            Video.v.addEventListener('ended', () => navigator.mediaSession.playbackState = 'paused');
-            Video.addOnChange(() => setTimeout(() => this.onChange(), 200)); // TODO: Should it be 200ms?
+            // TODO: Add player event to Page obj to update these event listeners
+            Page.v.addEventListener('play', () => data += 'PLAY'); // TODO: If window was just created then pause the video, then play video when window gains focus
+            Page.v.addEventListener('pause', () => data += 'PAUS');
+            Page.v.addEventListener('ended', () => navigator.mediaSession.playbackState = 'paused');
+            Page.addCallback('video', () => setTimeout(() => this.onChange(), 200)); // TODO: Should it be 200ms?
             this.onChange();
         }
         onChange() {
@@ -1071,13 +1032,13 @@ const settingsDescriptor = {
         onMedia(ev) {
             switch (ev.action) {
                 case 'stop':
-                case 'play': Video.v.play(); break;
-                case 'pause': Video.v.pause(); break;
+                case 'play': Page.v.play(); break;
+                case 'pause': Page.v.pause(); break;
                 case 'nexttrack': document.querySelector('.ytp-next-button').click(); break;
                 case 'previoustrack':
                     let prev = document.querySelector('.ytp-prev-button');
                     if (prev) prev.click();
-                    else      Video.v.currentTime = 0;
+                    else      Page.v.currentTime = 0;
             }
         }
         static registerSettings() {
@@ -1110,8 +1071,8 @@ const settingsDescriptor = {
             this.note = this.addItem(new mItemBtn(this, 'N', 'Note'));
             this.note.addOnClick(() => this.handleOnClick());
             this.registerKeys([settings.keybinds.note]);
-            Video.addOnChange(() => this.onChange());
-            Video.v.addEventListener('timeupdate', ev => this.onTimeUpdate(ev));
+            Page.addCallback('video', () => this.onChange());
+            Page.v.addEventListener('timeupdate', ev => this.onTimeUpdate(ev));
             this.notes = []; // Contains arrays with [timestamp (seconds), text]
             this.barItems = [];
             this.onChange();
@@ -1119,11 +1080,11 @@ const settingsDescriptor = {
         createBarItems() {
             if (this.notes.length) {
                 const createItem = (note, i) => {
-                    const start = note[0] / Video.v.duration;
+                    const start = note[0] / Page.v.duration;
                     if (this.barItems[i] == null) {
                         this.barItems[i] = new BarItem({ color:'#546', group:1, height:11, onClick:(btn) => {
                             switch (btn) {
-                                case 0: Video.v.currentTime = note[0]; break;
+                                case 0: Page.v.currentTime = note[0]; break;
                                 case 2: this.editNote(note);           break;
                             }
                         }, start, text:note[1] });
@@ -1153,22 +1114,22 @@ const settingsDescriptor = {
             childElement.appendChild(cancel);
             childElement.style.display = 'grid';
             this.popup = Popup.create({ inBar:true, childElement, centerX:true,
-                left: (note[0] / Video.v.duration * 100) + '%', top: 'calc(100% + 5px)' }); // TODO: Maybe just attachTo barItem? (create a temp one if doesn't exist) (would need some fix for percentage then tho)
+                left: (note[0] / Page.v.duration * 100) + '%', top: 'calc(100% + 5px)' }); // TODO: Maybe just attachTo barItem? (create a temp one if doesn't exist) (would need some fix for percentage then tho)
             inp.focus();
         }
         goToNote(index) {
             if (index < this.notes.length) {
                 this.notes.sort((a, b) => a[0] - b[0]);
-                Video.v.currentTime = this.notes[index][0];
+                Page.v.currentTime = this.notes[index][0];
             }
         }
         handleOnClick() {
             // TODO: Check if there already is a note at current time before creating a new one
-            this.editNote([Video.v.currentTime, '']);
+            this.editNote([Page.v.currentTime, '']);
             this.createBarItems();
         }
         onChange() {
-            if (Video.id) this.notes = GM_getValue(`n-${Video.id}`, []);
+            if (Page.vid) this.notes = GM_getValue(`n-${Page.vid}`, []);
             else          this.notes = [];
             this.barItems.forEach(b => b.remove());
             this.barItems.length = 0;
@@ -1183,7 +1144,7 @@ const settingsDescriptor = {
         }
         calculateNextSkip() {
             this.notes.sort((a, b) => a[1] - b[1]);
-            const next = this.notes.find(trim => Video.v.currentTime < trim[1]);
+            const next = this.notes.find(trim => Page.v.currentTime < trim[1]);
             this.nextSkip = next ? next[1] : null;
         }
         // Empty newText removes the note
@@ -1209,8 +1170,8 @@ const settingsDescriptor = {
             this.createBarItems();
         }
         saveNotes() {
-            if (Video.id)
-                GM_setValue(`n-${Video.id}`, this.notes);
+            if (Page.vid)
+                GM_setValue(`n-${Page.vid}`, this.notes);
         }
         static registerSettings() {
             super.registerSettings(true, {
@@ -1235,12 +1196,12 @@ const settingsDescriptor = {
     mModule.mMetadata = class mMetadata extends mModule {
         constructor() {
             super();
-            this.onVideoChangeId = Video.addOnChange(() => this.onVideoChange());
+            this.onVideoChangeId = Page.addCallback('video', () => this.onVideoChange());
             this.onPageChangeId = Page.addCallback('url', () => this.onPageChange());
             this.onVideoChange();
         }
         onVideoChange() {
-            if (Video.id && Video.id != Video.prevId)
+            if (Page.vid && Page.vid != Page.prevVid)
                 setTimeout(() => this.saveMetadata(), 500); // FIXME: Gives time for elements to update in DOM, should rather check with a loop than doing it like this
         }
         onPageChange() {
@@ -1261,7 +1222,7 @@ const settingsDescriptor = {
             }
         }
         saveMetadata() {
-            GM_setValue(`m-${Video.id}`, {
+            GM_setValue(`m-${Page.vid}`, {
                 title: title.innerText,
                 uploaded: new Date(q('#date>yt-formatted-string').innerText).getTime(),
                 uploaderName: q('.ytd-channel-name').innerText,
@@ -1272,7 +1233,7 @@ const settingsDescriptor = {
             });
         }
         removeMetadata() {
-            GM_setValue(`m-${Video.id}`, null);
+            GM_setValue(`m-${Page.vid}`, null);
         }
         static registerSettings() {
             super.registerSettings(false, null, ['Metadata', 'section', {
@@ -1395,7 +1356,7 @@ const settingsDescriptor = {
 
         // Initialize modules
         const REF = {}; Object.keys(mModule).forEach(k => REF[mModule[k].rName] = k);
-        settings.enabledModules.map(name => new mModule[REF[name]]());
+        settings?.enabledModules.map(name => new mModule[REF[name]]());
 
         title.parentElement.insertBefore(container, title);
     }
@@ -1404,9 +1365,9 @@ const settingsDescriptor = {
     // TODO: If current page isn't a watch page maybe we should wait some other way?
     let id = setInterval(() => {
         if (!title) title = document.querySelector('#container>.title');
-        if (!Video.v) Video.v = document.querySelector('video');
-        if (title && Video.v) {
-            Video.setVideo(Video.v);
+        if (!Page.v) Page.v = document.querySelector('video');
+        if (title && Page.v) {
+            Page.setVideo(Page.v);
             clearInterval(id);
             setTimeout(init, 20);
         }
