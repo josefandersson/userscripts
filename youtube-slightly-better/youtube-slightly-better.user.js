@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.53
+// @version      1.54
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -1188,7 +1188,7 @@ const settingsDescriptor = {
             const close = () => { this.popup.remove(); this.popup = null; }
             if (this.popup) close();
             const ce = cr('div', { innerHTML:
-                `<input type='text' value='${timeToHHMMSSmss(note[0])}'><textarea>${note[1]}</textarea>` +
+                `<input type='text' value='${timeToHHMMSSmss(note[0])}'><textarea>${note[1] || ''}</textarea>` +
                 '<button>Save</button><button>Cancel</button>' });
             ce.children[1].onkeydown = ev => {
                 if      (ev.key === 'Escape')              { close(); } // TODO: Don't close window if there are changes
@@ -1197,7 +1197,7 @@ const settingsDescriptor = {
             ce.children[2].onclick = () => { this.saveNote(note, ce.children[0].value, ce.children[1].value); close(); };
             ce.children[3].onclick = () => { close(); };
             ce.style.display = 'grid';
-            if (note[1].length)
+            if (note[1] != null)
                 ce.appendChild(cr('button', { innerText:'Remove', onclick:()=>{ this.saveNote(note); close(); } }));
             this.popup = Popup.create({ inBar:true, childElement:ce, centerX:true,
                 left: (note[0] / Page.v.duration * 100) + '%', top: 'calc(100% + 5px)' }); // TODO: Maybe just attachTo barItem? (create a temp one if doesn't exist) (would need some fix for percentage then tho)
@@ -1211,7 +1211,7 @@ const settingsDescriptor = {
         }
         handleOnClick() {
             // TODO: Check if there already is a note at current time before creating a new one
-            this.editNote([Page.v.currentTime, '']);
+            this.editNote([Page.v.currentTime, null]);
             this.createBarItems();
         }
         onChange() {
