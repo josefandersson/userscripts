@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.52
+// @version      1.53
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -23,7 +23,7 @@
 //        - Rewrite history module, if video is replayed without reloaded add extra plays to history,
 //          use video progression every second to check playtime instead of real life time since the video can be speed up/down
 //        - Remake init and module system somewhat, so that it inits on any page, not just when video is detected, also add onEnable/onDisable for toggling modules
-//        - Add module: quick-replay (mark a start and stop to replay, one more click clears)
+//        - Add modules: quick-replay (mark a start and stop to replay, one more click clears), currentTime (but a barItem for current time outside of the video overlay)
 
 
 // =============
@@ -48,9 +48,14 @@ const settingsDescriptor = {
     const cr = (type, obj) => Object.assign(document.createElement(type), obj || {});
     const q = sel => document.querySelector(sel);
     const qa = sel => document.querySelectorAll(sel);
-    const secondsToHms = (sec, dyn=true, units=null, millis=true) => {
+    const prox = (val1, val2, lim) => Math.abs(val1 - val2) < lim;
+    const timeToHHMMSSmss = (sec, dyn=true, units=null, millis=true) => {
         if (!units) units = dyn && Page.v.duration < 3600 ? [60,1] : [3600,60,1];
         return units.map(v => { const nv=Math.floor(sec/v); sec%=v; return nv < 10 ? `0${nv}` : nv; }).join(':') + (millis && 0 < sec ? `.${sec.toFixed(3).substring(2)}` : '');
+    };
+    const timeFromHHMMSSmss = str => {
+        const t = str.split(/[: ]/).reverse().map(n => +n);
+        return (t[0]||0) + (t[1]||0) * 60 + (t[2]||0) * 3600;
     };
 
 
@@ -79,9 +84,10 @@ const settingsDescriptor = {
     const Page = {
         v: null,           // Video DOM element
         vid: null,         // Video id (v=xxxxxxxx in URL)
-        prevVid: null,      // Previous video id
+        prevVid: null,     // Previous video id
         prevUrl: null,     // Previous url
         isTheater: false,  // Player is in theater mode
+        time: null,
 
         callbacks: {
             theater: [],
@@ -97,7 +103,6 @@ const settingsDescriptor = {
             this.tidUrl = this.callbacks.url.length ? setTimeout(() => this.loopUrl, 500) : null;
         },
 
-        
         addCallback: function(ev, cb) {
             const cbs = this.callbacks[ev];
             if (!cbs) throw 'unknown event: ' + ev;
@@ -142,11 +147,15 @@ const settingsDescriptor = {
 
         setVideo: function(video) {
             this.v = video;
-            this.v.addEventListener('loadeddata', () => {
-                this.prevId = this.id;
-                this.id = new URLSearchParams(location.search).get('v');
+            const cb = () => {
+                this.prevVid = this.vid;
+                const param = new URLSearchParams(location.search);
+                this.vid = param.get('v');
+                this.time = param.get('t');
                 this.call('video');
-            });
+            }
+            this.v.addEventListener('loadeddata', cb);
+            cb();
         },
     };
 
@@ -274,7 +283,8 @@ const settingsDescriptor = {
     // =====================
     // Popup hovering window
     // =====================
-    const OFFSET_Y = 10;
+    // TODO: Make popup changeable while window is displaying, eg when changing progress mode by clicking to display current mode
+    const OFFSET_Y = 10; // TODO: Make window offset a setting?
     const Popup = {
         positionPopup: function(popup, left, top, centerX=false, centerY=false, popRect=null) {
             if (!popRect) {
@@ -329,12 +339,14 @@ const settingsDescriptor = {
         constructor() {
             this.element = cr('div');
             container.appendChild(this.element);
+            this.element.style.display = 'none';
             this.items = [];
             this.constructor.i = this;
         }
         addItem(item) {
             this.items.push(item);
             this.element.appendChild(item.element);
+            this.element.style.display = '';
             return item;
         }
         registerKeys(keys, event='keypress') {
@@ -370,9 +382,8 @@ const settingsDescriptor = {
     // Playback Rate Module
     // ====================
     // 
-    // - Change video playback rate by clicking on S or F. (Hold and release to change rate faster)
+    // - Change video playback rate. (Hold btns or keys to change rate faster)
     // - Current rate is shown between S and F. Click current rate to reset rate to 1.
-    // - Use keybindings a, s, d for the three buttons respectively.
     //
     mModule.mPlaybackRate = class mPlaybackRate extends mModule {
         constructor() {
@@ -502,17 +513,12 @@ const settingsDescriptor = {
     // - Prompt for timestamp by clicking on G.
     // - Use keybinding g to open prompt.
     // - Prompt formatting examples:
-    //   05:03 -> 5m3s
-    //   7:9:23 -> 7h9m23s
-    //   :24 -> 24s
-    //   19 -> 19m
-    //   1: -> 1h
-    //   t2 -> second trim (if mTrim is enabled)
-    //   n  -> first note (if mNotes is enabled)
-    //   n5 -> fifth note (if mNotes is enabled)
-    //   You may use a literal space (' ') instead of colon (':').
-    //   Adding + or - before time will seek relative to current time.
-    // TODO: Add - and + to move backwards and forwards by amount
+    //     05:03 -> 5m3s    7:9:23 -> 7h9m23s    :24 -> 24s    19 -> 19m    1: -> 1h
+    //     t2 -> second trim (if mTrim is enabled)
+    //     n  -> first note    n5 -> fifth note (if mNotes is enabled)
+    //     You may use a literal space (' ') instead of colon (':').
+    //     Adding + or - before time will seek relative to current time.
+    // TODO: Rename to mSeek
     //
     mModule.mGoToTimestamp = class mGoToTimestamp extends mModule {
         constructor() {
@@ -549,10 +555,10 @@ const settingsDescriptor = {
                 if (!index) index = 1;
                 if (target === 'n') {
                     if (mModule.mNotes.i)
-                        mModule.mNotes.i.goToNote(index-1);
+                        mModule.mNotes.i.seekNote(index-1);
                 } else {
                     if (mModule.mTrim.i)
-                        mModule.mTrim.i.goToTrim(index-1);
+                        mModule.mTrim.i.seekTrim(index-1);
                 }
                 return;
             } else { // 01:02:03,02:03,03 (normal)
@@ -735,12 +741,15 @@ const settingsDescriptor = {
             this.onChange();
         }
         handleOnClick() {
-            const modes = ['percentage', 'time', 'timeleft'];
+            const modes = ['percentage', 'time', 'timeleft', 'minimum', 'minimumleft'];
             this.mode = modes[(modes.indexOf(this.mode) + 1) % modes.length];
+            GM_setValue('p_mode', this.mode);
+            this.progress.text = `Video progression\nCurrent mode: ${this.mode}\nLeft-click: Cycle mode`;
             this.updateProgression();
         }
         onChange() {
-            this.units = Page.v.duration < 3600 ? [60,1] : [3600,60,1];
+            this.mode = GM_getValue('p_mode', 'percentage');
+            this.progress.text = `Video progression\nCurrent mode:${this.mode}\nLeft-click: Cycle mode`;
             this.updateProgression();
         }
         onKey(ev) {
@@ -753,27 +762,25 @@ const settingsDescriptor = {
             let newValue;
             switch (this.mode) {
                 case 'percentage':
-                    newValue = Math.round(Page.v.currentTime / Page.v.duration * 100);
-                    if (newValue === this.oldValue)
-                        return;
-                    newValue = this.oldValue = `${newValue}%`;
+                    newValue = `${Math.round(Page.v.currentTime / Page.v.duration * 100)}%`;
                     break;
                 case 'time':
-                    newValue = Math.round(Page.v.currentTime);
-                    if (newValue === this.oldValue)
-                        return;
-                    newValue = this.oldValue = secondsToHms(newValue, true, this.units);
+                    newValue = timeToHHMMSSmss(Math.round(Page.v.currentTime), true);
                     break;
                 case 'timeleft':
-                    newValue = Math.round(Page.v.duration - Page.v.currentTime);
-                    if (newValue === this.oldValue)
-                        return;
-                    newValue = this.oldValue = secondsToHms(newValue, true, this.units);
+                    newValue = timeToHHMMSSmss(Math.round(Page.v.duration - Page.v.currentTime), true);
+                    break;
+                case 'minimum':
+                case 'minimumleft':
+                    const t = this.mode === 'minimum' ? Page.v.currentTime : Page.v.duration - Page.v.currentTime;
+                    newValue = t < 60 ? `${Math.round(t)}s` : t < 3600 ? `${Math.round(t / 60)}m` : `${Math.round(t / 3600)}h`;
                     break;
                 default:
                     return;
             }
-            this.progress.element.innerText = newValue;
+            if (newValue === this.oldValue)
+                return;
+            this.progress.element.innerText = this.oldValue = newValue;
         }
         static registerSettings() {
             super.registerSettings(true, {
@@ -786,7 +793,7 @@ const settingsDescriptor = {
 
 
 
-    const TRIM_PROXIMITY = .99; // TODO: Add to settings
+    const TRIM_PROXIMITY = .5; // TODO: Add to settings
 
     // ===========
     // Trim Module
@@ -801,6 +808,8 @@ const settingsDescriptor = {
     //   TODO: Before skipping to end of video/next vid after trim, check if video is on repeat, if so, seek to first trim again
     //   TODO: Can't seem to start trim at start of video?
     //   TODO: Redo whole module with use Bar
+    //   TODO: If Page.time, disable trims until one is clicked?
+    //   TODO: If video is seeked manually (mouse or keys)
     //
     mModule.mTrim = class mTrim extends mModule {
         constructor() {
@@ -810,128 +819,210 @@ const settingsDescriptor = {
             this.registerKeys([settings.keybinds.trim]);
             this.onChangeId = Page.addCallback('video', () => this.onChange());
             Page.v.addEventListener('timeupdate', ev => this.onTimeUpdate(ev)); // TODO: Add newVideo event to Video obj
+            Page.v.addEventListener('seeking', ev => this.onSeeking());
+            this.active = true;
+            this.activeOverride = 0;
             this.trims = []; // Contains arrays with [startTimestamp, endTimestamp] (seconds)
-            this.current = null;
+            this.barItems = [];
+            this.current = []; // [timestamp, barItem]
             this.onChange();
         }
-        drawTrims() {
-            if (!this.trims.length && !this.current) {
-                this.trimBar.style.display = 'none';
+        onSeeking() {
+            // TODO: Only set active false if no within a trim
+            this.setActive(false);
+        }
+        seekTrim(index) {
+            if (this.trims[index]) {
+                Page.v.currentTime = this.trims[index][0];
+                this.activeOverride++;
+                this.setActive(true);
+            }
+        }
+        calculateCurrent() {
+            let currentTime = Page.v.currentTime;
+            let startInProx = false;
+            const inProx = this.trims.find(trim => (startInProx = prox(currentTime, trim[0], TRIM_PROXIMITY)) || prox(currentTime, trim[1], TRIM_PROXIMITY));
+            if (this.current.length) {
+                if (inProx) {
+                    // Extend inProx trim to current
+                    const i = this.trims.indexOf(inProx);
+                    inProx[startInProx ? 0 : 1] = this.current[0];
+                    // TODO: Make sure the order in inProx is correct
+                    this.barItems[i].setStartStop(inProx[0], inProx[1]);
+                } else {
+                    // TODO:
+                    // If within another trim
+                        // Split other trim into two (mask)
+                    // Else if crossing another trim
+                        // Merge trims or cut?
+                    // Else
+                        const trim = [this.current[0], currentTime]; // TODO: Make sure the order is correct
+                        this.trims.push(trim);
+                        const item = new BarItem({ color:'#aa3', height:4, onClick:btn => {
+                            switch (btn) {
+                                case 0: Page.v.currentTime = trim[0]; this.activeOverride++; this.setActive(true); break;
+                                case 2: this.editTrim(trim);
+                            }
+                        }, start:trim[0]/Page.v.duration, stop:trim[1]/Page.v.duration });
+                        this.barItems.push(item);
+                        Bar.addItem(item);
+                    // If any trims are fully inside
+                        // Make inside trims split created trim
+                }
+                this.removeCurrent();
+                this.saveTrims();
             } else {
-                this.trimBar.style.display = 'block';
-                [...this.trimBar.children].forEach(c => c.remove());
-                const drawTrim = (start, end, i) => {
-                    // Bar.addItem(new BarItem({ color:'#aa3', height:'5px', onClick:btn => {
-                    //     switch (btn) {
-                    //         case 0:
-                    //             Page.v.currentTime = start;
-                    //             break;
-                    //         case 1:
-                    //             this.trims.splice(i, 1);
-                    //             this.drawTrims();
-                    //             this.saveTrims();
-                    //             break;
-                    //     }
-                    // }, start:start/Page.v.duration, stop:end/Page.v.duration }));
-                    const trim = document.createElement('div');
-                    trim.style.height = '150%';
-                    trim.style.position = 'absolute';
-                    trim.style.left = start / Page.v.duration * 100 + '%';
-                    trim.style.width = (end - start) / Page.v.duration * 100 + '%';
-                    trim.style.backgroundColor = '#dd2fe0';
-                    let id, prevClick = 0;
-                    trim.onclick = () => {
-                        clearTimeout(id);
-                        if (Date.now() < prevClick + 200) {
-                            this.trims.splice(i, 1);
-                            this.drawTrims();
-                            this.saveTrims();
-                        } else {
-                            prevClick = Date.now();
-                            id = setTimeout(() => {
-                                Page.v.currentTime = start;
-                            }, 200);
-                        }
-                    };
-                    this.trimBar.appendChild(trim);
-                };
-                this.trims.forEach(drawTrim);
-                if (this.current) {
-                    const curr = document.createElement('div');
-                    const left = this.current / Page.v.duration * 100 + '%';
-                    Object.assign(curr.style, { height:'200%', position:'absolute', width:'2px', backgroundColor:'#40fdd1', left });
-                    this.trimBar.appendChild(curr);
+                if (inProx) {
+                    currentTime = inProx[startInProx ? 1 : 0];
+                    const i = this.trims.indexOf(inProx);
+                    this.barItems[i].remove();
+                    this.trims.splice(i, 1);
+                    this.barItems.splice(i, 1);
+                    this.saveTrims();
+                }
+                // Create current
+                this.current[0] = currentTime;
+                const item = new BarItem({ color:'#a30', onClick:btn => {
+                    switch (btn) {
+                        case 0: Page.v.currentTime = currentTime; break;
+                        case 2: this.removeCurrent();
+                    }
+                }, start:currentTime/Page.v.duration });
+                Bar.addItem(this.current[1] = item);
+                this.trim.element.style.color = 'red'; // TODO: Set color
+            }
+            this.updateText();
+        }
+        editTrim(trim) {
+            const close = () => { this.popup.remove(); this.popup = null; }
+            if (this.popup) close();
+            const ce = cr('div', { innerHTML:
+                `<input type='text' value='${timeToHHMMSSmss(trim[0])}'> - <input type='text' value='${timeToHHMMSSmss(trim[1])}'>` +
+                '<button>Save</button><button>Cancel</button><button>Remove</button>' });
+            ce.children[2].onclick = () => { this.saveTrim(trim, ce.children[0].value, ce.children[1].value); close(); };
+            ce.children[3].onclick = () => { close(); };
+            ce.children[4].onclick = () => { this.saveTrim(trim); close(); };
+            ce.style.display = 'grid';
+            this.popup = Popup.create({ inBar:true, childElement:ce, centerX:true,
+                left: ((trim[0] + trim[1]) / 2 / Page.v.duration * 100) + '%', top: 'calc(100% + 5px)' }); // TODO: Maybe just attachTo barItem? (create a temp one if doesn't exist) (would need some fix for percentage then tho)
+        }
+        saveTrim(trim, start=null, stop=null) {
+            if (start == null && stop == null) {
+                const i = this.trims.indexOf(trim);
+                this.barItems[i].remove();
+                this.trims.splice(i, 1);
+                this.updateText();
+            } else {
+                if (start == null) {
+                    // TODO: Change start for trim and barItem
+                }
+                if (stop == null) {
+                    // TODO: Change stop for trim and barItem
                 }
             }
+            this.saveTrims();
+        }
+        removeCurrent() {
+            this.current[1]?.remove();
+            this.current.length = 0;
+            this.trim.element.style.color = '';
+        }
+        updateText() {
             this.trim.element.innerText = `T${this.trims.length || ''}`;
         }
-        goToTrim(index) {
-            if (this.trims[index])
-                Page.v.currentTime = this.trims[index][0];
-        }
-        handleOnClick() {
-            const currentTime = Page.v.currentTime;
-            if (this.inProximity(currentTime, this.current, TRIM_PROXIMITY)) {
-                this.current = null;
-                this.trim.element.style.color = '';
-            } else {
-                const inProx = this.trims.find(trim => this.inProximity(currentTime, trim[0], TRIM_PROXIMITY) ||
-                    this.inProximity(currentTime, trim[1], TRIM_PROXIMITY));
-                if (inProx && !this.current) {
-                    this.trims.splice(this.trims.indexOf(inProx), 1);
-                } else {
-                    if (this.current) {
-                        if (this.current < currentTime)
-                            this.trims.push([this.current, currentTime]);
-                        else
-                            this.trims.push([currentTime, this.current]);
-                        this.current = null;
-                        this.saveTrims();
-                        this.trim.element.style.color = '';
-                    } else {
-                        this.current = currentTime;
-                        this.trim.element.style.color = '#40fdd1';// '#fd62ea';
-                    }
-                }
+        setActive(active) {
+            if (this.active != active) {
+                if (!active && 0 < this.activeOverride)
+                    return this.activeOverride--;
+                this.active = active;
+                const color = active ? '#b97621' : '#463014';
+                this.barItems.forEach(i => i.setColor(color));
+                if (active)
+                    this.calculateNextSkip();
             }
-            this.drawTrims();
         }
-        inProximity(val1, val2, prox) {
-            return Math.abs(val1 - val2) < prox;
+        onKey(ev) {
+            super.onKey(ev);
+            this.calculateCurrent();
+        }
+        saveTrims() {
+            this.calculateNextSkip();
+            if (Page.vid)
+                GM_setValue(`t-${Page.vid}`, this.trims);
         }
         onChange() {
             if (Page.vid) this.trims = GM_getValue(`t-${Page.vid}`, []);
             else          this.trims = [];
-            if (!this.trimBar) {
-                const buttons = document.querySelector('.ytp-chrome-controls');
-                this.trimBar = document.createElement('div');
-                Object.assign(this.trimBar.style, { height:'2px', transform:'translateY(-38px)', backgroundColor:'#bf79ff40', display:'none' });
-                buttons.parentElement.appendChild(this.trimBar);
-            }
-            this.current = null;
-            this.trim.element.style.color = '';
-            const params = new URLSearchParams(location.search); // TODO: Add t param to Page obj?
-            if (this.trims.length && !params.get('t')) {
+            this.barItems.forEach(i => i.remove());
+            this.barItems.length = 0;
+            this.removeCurrent();
+            if (this.trims.length && !Page.time) { // TODO: Move to calculateNextSkip() ?
                 this.trims.sort((a, b) => a[0] - b[0]);
                 Page.v.currentTime = this.trims[0][0];
             }
+            // TODO: If url contains time then disable trims when video loads
             this.calculateNextSkip();
-            this.drawTrims();
+            const createBarItem = (trim, i) => {
+                const item = new BarItem({ color:'#aa3', height:4, onClick:btn => {
+                    switch (btn) {
+                        case 0: Page.v.currentTime = trim[0]; this.activeOverride++; this.setActive(true); break;
+                        case 2: this.editTrim(trim);
+                    }
+                }, start:trim[0]/Page.v.duration, stop:trim[1]/Page.v.duration });
+                Bar.addItem(item);
+                this.barItems[i] = item;
+            };
+            this.trims.forEach(createBarItem);
+            this.updateText();
         }
-        onKey(ev) {
-            super.onKey(ev);
-            this.handleOnClick();
+        
+        
+        handleOnClick() {
+            this.calculateCurrent();
+            return;
+            if (this.current.length && prox(currentTime, this.current[0], TRIM_PROXIMITY)) {
+                this.setCurrent(null);
+            } else {
+                const inProx = this.trims.find(trim => prox(currentTime, trim[0], TRIM_PROXIMITY) || prox(currentTime, trim[1], TRIM_PROXIMITY));
+                if (inProx && !this.current) {
+                    const i = this.trims.indexOf(inProx);
+                    this.barItems[i]?.remove();
+                    this.barItems.splice(i, 1);
+                    this.trims.splice(i, 1);
+                } else if (this.current) {
+                    let arr;
+                    if (this.current < currentTime)
+                        arr = [this.current, currentTime];
+                    else
+                        arr = [currentTime, this.current];
+                    this.trims.push(arr);
+                    this.current[1].remove();
+                    this.current.length = 0;
+                    new BarItem({ color:'#a30', onClick:btn => {
+                        switch (btn) {
+                            case 0: Page.v.currentTime = currentTime; break;
+                            case 1: this.editTrim();
+                        }
+                    }, start:start/Page.v.duration, stop:end/Page.v.duration });
+                    this.saveTrims();
+                    this.trim.element.style.color = '';
+                } else {
+                    this.current[0] = currentTime;
+                    this.createBarItem(currentTime);
+                    this.trim.element.style.color = '#40fdd1';// '#fd62ea';
+                }
+            }
         }
         onTimeUpdate() {
-            if (this.nextSkip) {
-                if (this.nextSkip <= Page.v.currentTime) {
-                    this.calculateNextSkip();
-                    if (this.nextSkip) {
-                        this.trims.sort((a, b) => a[0] - b[0]);
-                        Page.v.currentTime = this.trims.find(trim => Page.v.currentTime < trim[0])[0];
-                    } else {
-                        Page.v.currentTime = Page.v.duration;
-                    }
+            if (!this.active) return;
+            if (Page.v.seeking) this.setActive(false);
+            if (this.nextSkip && this.nextSkip <= Page.v.currentTime) {
+                this.calculateNextSkip();
+                if (this.nextSkip) {
+                    this.trims.sort((a, b) => a[0] - b[0]);
+                    Page.v.currentTime = this.trims.find(trim => Page.v.currentTime < trim[0])[0];
+                } else {
+                    Page.v.currentTime = Page.v.duration;
                 }
             }
         }
@@ -940,11 +1031,7 @@ const settingsDescriptor = {
             const next = this.trims.find(trim => Page.v.currentTime < trim[1]);
             this.nextSkip = next ? next[1] : null;
         }
-        saveTrims() {
-            this.calculateNextSkip();
-            if (Page.vid)
-                GM_setValue(`t-${Page.vid}`, this.trims);
-        }
+
         static registerSettings() {
             super.registerSettings(true, {
                 trim: ['Trim', 'text', 't']
@@ -1100,24 +1187,23 @@ const settingsDescriptor = {
         editNote(note) {
             const close = () => { this.popup.remove(); this.popup = null; }
             if (this.popup) close();
-            const childElement = cr('div', { innerText:secondsToHms(note[0]) });
-            const inp = cr('textarea', { innerText:note[1], onkeydown:ev=>{
+            const ce = cr('div', { innerHTML:
+                `<input type='text' value='${timeToHHMMSSmss(note[0])}'><textarea>${note[1]}</textarea>` +
+                '<button>Save</button><button>Cancel</button>' });
+            ce.children[1].onkeydown = ev => {
                 if      (ev.key === 'Escape')              { close(); } // TODO: Don't close window if there are changes
-                else if (ev.key === 'Enter' && ev.ctrlKey) { this.saveNote(note, inp.value); close(); }
-            }});
-            const cancel = cr('button', { innerText:'Cancel', onclick:()=>{ close(); } });
-            const save = cr('button', { innerText:'Save', onclick:()=>{ this.saveNote(note, inp.value); close(); } });
-            childElement.appendChild(inp);
-            childElement.appendChild(save);
+                else if (ev.key === 'Enter' && ev.ctrlKey) { this.saveNote(note, ce.children[0].value, ce.children[1].value); close(); }
+            };
+            ce.children[2].onclick = () => { this.saveNote(note, ce.children[0].value, ce.children[1].value); close(); };
+            ce.children[3].onclick = () => { close(); };
+            ce.style.display = 'grid';
             if (note[1].length)
-                childElement.appendChild(cr('button', { innerText:'Remove', onclick:()=>{ this.saveNote(note, ''); close(); } }));
-            childElement.appendChild(cancel);
-            childElement.style.display = 'grid';
-            this.popup = Popup.create({ inBar:true, childElement, centerX:true,
+                ce.appendChild(cr('button', { innerText:'Remove', onclick:()=>{ this.saveNote(note); close(); } }));
+            this.popup = Popup.create({ inBar:true, childElement:ce, centerX:true,
                 left: (note[0] / Page.v.duration * 100) + '%', top: 'calc(100% + 5px)' }); // TODO: Maybe just attachTo barItem? (create a temp one if doesn't exist) (would need some fix for percentage then tho)
-            inp.focus();
+            ce.children[1].focus();
         }
-        goToNote(index) {
+        seekNote(index) {
             if (index < this.notes.length) {
                 this.notes.sort((a, b) => a[0] - b[0]);
                 Page.v.currentTime = this.notes[index][0];
@@ -1147,24 +1233,32 @@ const settingsDescriptor = {
             const next = this.notes.find(trim => Page.v.currentTime < trim[1]);
             this.nextSkip = next ? next[1] : null;
         }
-        // Empty newText removes the note
-        saveNote(note, newText) { // TODO: add newTime for moving timestamp, also call note[2].setStartStop() with new timestamp
-            let i;
-            if ((i = this.notes.indexOf(note)) !== -1) {
-                if (newText.length) {
-                    note[1] = newText;
-                } else {
-                    if (this.barItems[i]) {
-                        Bar.removeItem(this.barItems[i]);
-                        this.barItems.splice(i, 1);
-                    }
-                    this.notes.splice(i, 1);
-                }
-            } else if (newText.length) {
-                note[1] = newText;
-                this.notes.push(note);
+        saveNote(note, newTime=null, newText=null) { // TODO: call note[2].setStartStop() with new timestamp
+            let i = this.notes.indexOf(note);
+            if (newTime == null && newText == null) {
+                if (i === -1)
+                    return;
+                this.barItems[i].remove();
+                this.barItems.splice(i, 1);
+                this.notes.splice(i, 1);
             } else {
-                return;
+                if (newTime != null) {
+                    const s = timeFromHHMMSSmss(newTime);
+                    if (isFinite(s))
+                        note[0] = s;
+                    else
+                        console.warn('New time is not finite:', newTime, s);
+                }
+                if (newText != null) {
+                    note[1] = newText;
+                }
+                if (i === -1) {
+                    this.notes.push(note);
+                    // TODO: Create bar item here instead of running createBarItems later, and remove that function?
+                } else {
+                    this.barItems[i].setStartStop(note[0]);
+                    this.barItems[i].text = note[1];
+                }
             }
             this.saveNotes();
             this.createBarItems();
@@ -1192,6 +1286,7 @@ const settingsDescriptor = {
     // - If history module is enabled, last watch date will most likely be last time metadata was updated
     // TODO: Make module fill in info for deleted videos in lists
     // TODO: Option to add metadata from videos in list when viewing list page
+    // TODO: Metadata is completely off: uploaderName SOMETIMES gets the description instead (due to bar div?), uploaderId is SOMETIMES the previous vids (correct) uploaderName
     //
     mModule.mMetadata = class mMetadata extends mModule {
         constructor() {
@@ -1258,8 +1353,9 @@ const settingsDescriptor = {
     class mItemTxt extends mItem { // displays text
         constructor(module, str, text=null) {
             super(module);
+            this.text = text;
             this.element.innerText = str;
-            if (text) this.element.onmouseenter = () => Popup.create({ target:this.element, text });
+            if (text) this.element.onmouseenter = () => Popup.create({ target:this.element, text:this.text });
         }
     }
     class mItemBtn extends mItemTxt { // click handle
