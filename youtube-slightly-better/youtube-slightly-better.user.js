@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.56
+// @version      1.57
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -33,7 +33,7 @@ let settings;
 const settingsDescriptor = {
     ytsb: ['YouTube Slightly Better', 'section', {
         keyPressRate: ['Key press rate (0 for system default)', 'number', 0],
-        enabledModules: ['Enabled modules', 'multiple', [], []],
+        enabledModules: ['Enabled modules', 'list', [], [], null, { orderable:true }],
         modules: ['Module settings', 'section', {}],
         keybinds: ['Keybinds', 'section', {}]
     }]
