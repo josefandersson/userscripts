@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.54
+// @version      1.55
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -980,38 +980,6 @@ const settingsDescriptor = {
         handleOnClick() {
             this.calculateCurrent();
             return;
-            if (this.current.length && prox(currentTime, this.current[0], TRIM_PROXIMITY)) {
-                this.setCurrent(null);
-            } else {
-                const inProx = this.trims.find(trim => prox(currentTime, trim[0], TRIM_PROXIMITY) || prox(currentTime, trim[1], TRIM_PROXIMITY));
-                if (inProx && !this.current) {
-                    const i = this.trims.indexOf(inProx);
-                    this.barItems[i]?.remove();
-                    this.barItems.splice(i, 1);
-                    this.trims.splice(i, 1);
-                } else if (this.current) {
-                    let arr;
-                    if (this.current < currentTime)
-                        arr = [this.current, currentTime];
-                    else
-                        arr = [currentTime, this.current];
-                    this.trims.push(arr);
-                    this.current[1].remove();
-                    this.current.length = 0;
-                    new BarItem({ color:'#a30', onClick:btn => {
-                        switch (btn) {
-                            case 0: Page.v.currentTime = currentTime; break;
-                            case 1: this.editTrim();
-                        }
-                    }, start:start/Page.v.duration, stop:end/Page.v.duration });
-                    this.saveTrims();
-                    this.trim.element.style.color = '';
-                } else {
-                    this.current[0] = currentTime;
-                    this.createBarItem(currentTime);
-                    this.trim.element.style.color = '#40fdd1';// '#fd62ea';
-                }
-            }
         }
         onTimeUpdate() {
             if (!this.active) return;
@@ -1057,16 +1025,7 @@ const settingsDescriptor = {
         onKey(ev) {
             super.onKey(ev);
             if (!Page.v.duration || !Page.vid) return;
-            const units = Page.v.duration < 3600 ? [60,1] : [3600,60,1];
-            const unitNms = ['s', 'm', 'h']; // TODO: Move this function to convert s to hh:mm:ss to helper functions, to be used in other modules
-            let cur = Math.round(Page.v.currentTime);
-            const time = units.map((v, i) => {
-                const nv = Math.floor(cur/v);
-                cur %= v;
-                if (nv === 0)
-                    return '';
-                return (nv < 10 ? `0${nv}` : nv) + unitNms[units.length-1-i];
-            }).join('');
+            const time = timeToHHMMSSmss(Page.v.currentTime, true, null, false).split(':').reverse().map((v, i) => v + ['s','m','h'][i]).reverse().join('');
             navigator.clipboard.writeText(`https://youtu.be/${Page.vid}?t=${time}`);
         }
         static registerSettings() {
