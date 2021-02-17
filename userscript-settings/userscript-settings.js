@@ -1,7 +1,7 @@
 // ==UserLibrary==
 // @name          Userscript Settings
 // @namespace     https://github.com/josefandersson/userscripts/tree/master/userscript-settings
-// @version       2.5
+// @version       2.5a
 // @description   Library for adding a settings popup to userscripts.
 // @author        Josef Andersson
 // ==/UserLibrary==
@@ -510,15 +510,15 @@ if (typeof window.UserscriptSettings === 'undefined') {
 .usstngs .hasUnsaved {box-shadow:0 0 8px yellow;}
 .usstngs .hiddenAction {display:none;}
 .usstngs .disabledAction {color:red;}
-table.ytsb-list-setting { counter-reset:row; color:#d0d0d0 !important }
-table.ytsb-list-setting tr:not(.unchecked) { counter-increment:row; }
-table.ytsb-list-setting tr:not(.unchecked) td.ytsb-index::before { content:counter(row); font-size:12px; text-align:center; display:block; font-family:monospace; color:#888; }
-table.ytsb-list-setting td.ytsb-move { display:inline-block; height:1em; }
-table.ytsb-list-setting td.ytsb-move span { color:#888; cursor:pointer; font-size:.7em; height:50%; display:block; overflow:hidden; padding:0 5px; margin:0 -5px; }
-table.ytsb-list-setting td.ytsb-move span:hover { color:#ccc;border-color:brown; }
-table.ytsb-list-setting td.ytsb-move span:first-child::after { content:'▵'; position:relative; bottom:.4em; pointer-events:none; }
-table.ytsb-list-setting td.ytsb-move span:last-child::after { content:'▿'; position:relative; bottom:.4em; }
-table.ytsb-list-setting button.ytsb-add-row { width:100%; }` }));
+table.usstngs-list-setting { counter-reset:row; color:#d0d0d0 !important }
+table.usstngs-list-setting tr:not(.unchecked) { counter-increment:row; }
+table.usstngs-list-setting tr:not(.unchecked) td.usstngs-index::before { content:counter(row); font-size:12px; text-align:center; display:block; font-family:monospace; color:#888; }
+table.usstngs-list-setting td.usstngs-move { display:inline-block; height:1em; }
+table.usstngs-list-setting td.usstngs-move span { color:#888; cursor:pointer; font-size:.7em; height:50%; display:block; overflow:hidden; padding:0 5px; margin:0 -5px; }
+table.usstngs-list-setting td.usstngs-move span:hover { color:#ccc;border-color:brown; }
+table.usstngs-list-setting td.usstngs-move span:first-child::after { content:'▵'; position:relative; bottom:.4em; pointer-events:none; }
+table.usstngs-list-setting td.usstngs-move span:last-child::after { content:'▿'; position:relative; bottom:.4em; }
+table.usstngs-list-setting button.usstngs-add-row { width:100%; }` }));
     };
 
     /**
@@ -536,6 +536,7 @@ table.ytsb-list-setting button.ytsb-add-row { width:100%; }` }));
 
     /**
      * Custom select/multiple settings object, more feature rich than normal selects
+     * See the 'list' settings type in readme.
      * @param {Object} Options
      */
     const SettingList = function SettingList({ options=[], value=null, defaultValue=[], index=true, indexOnlyChecked=true, checkable=true, orderable=false, custom=false }={}) {
@@ -558,10 +559,20 @@ table.ytsb-list-setting button.ytsb-add-row { width:100%; }` }));
         this.items = [];
     };
 
+    /**
+     * Set the value for this setting.
+     * @param {Array} value New value
+     */
     SettingList.prototype.setValue = function(value) {
         // TODO: Ability to set this setting's value from the outside
     };
 
+    /**
+     * For private use
+     * Prepare to reorder the list by mouse movement.
+     * @param {Element} tr Option table row
+     * @param {Event} ev Mouse move event
+     */
     SettingList.prototype.beginMoving = function(tr, ev) {
         ev.preventDefault();
         const btn = ev.target;
@@ -608,6 +619,10 @@ table.ytsb-list-setting button.ytsb-add-row { width:100%; }` }));
         };
     };
 
+    /**
+     * Update the setting value from all options (if applicable: checked or unchecked and/or order).
+     * Also tells userscript settings instance about the change.
+     */
     SettingList.prototype.adoptValueFromElements = function() {
         if (this.checkable) {
             let checked = [];
@@ -625,8 +640,11 @@ table.ytsb-list-setting button.ytsb-add-row { width:100%; }` }));
             this.onchange(this.value);
     };
 
+    /**
+     * Create the list setting element (table)
+     */
     SettingList.prototype.createElement = function() {
-        this.element = cr('table', { className:'ytsb-list-setting' });
+        this.element = cr('table', { className:'usstngs-list-setting' });
         let toMake, toCheck;
         const values = this.value ? this.value : this.defaultValue;
         toMake = this.custom ? [...values] : [...this.options];
@@ -638,11 +656,11 @@ table.ytsb-list-setting button.ytsb-add-row { width:100%; }` }));
         toMake.forEach(opt => {
             const el = cr('tr', { option:opt });
             if (this.index) {
-                el.appendChild(cr('td', { className:'ytsb-index' }));
+                el.appendChild(cr('td', { className:'usstngs-index' }));
             }
             if (this.orderable) {
-                const up = cr('span', { className:'ytsb-move' });
-                const down = cr('span', { className:'ytsb-move' });
+                const up = cr('span', { className:'usstngs-move' });
+                const down = cr('span', { className:'usstngs-move' });
                 up.onclick = () => {
                     if (el.previousElementSibling) {
                         el.parentElement.insertBefore(el, el.previousElementSibling);
@@ -655,7 +673,7 @@ table.ytsb-list-setting button.ytsb-add-row { width:100%; }` }));
                         this.adoptValueFromElements();
                     }
                 };
-                let td = cr('td', { className:'ytsb-move' });
+                let td = cr('td', { className:'usstngs-move' });
                 td.appendChild(up); td.appendChild(down); el.appendChild(td);
                 up.addEventListener('mousedown', ev => this.beginMoving(el, ev));
                 down.addEventListener('mousedown', ev => this.beginMoving(el, ev));
@@ -689,7 +707,7 @@ table.ytsb-list-setting button.ytsb-add-row { width:100%; }` }));
             const tr = cr('tr');
             if (this.index) tr.appendChild(cr('td'));
             if (this.checkable) tr.appendChild(cr('td'));
-            const add = cr('button', { className:'ytsb-add-row', innerText:'Add row' });
+            const add = cr('button', { className:'usstngs-add-row', innerText:'Add row' });
             add.onclick = () => console.log('Add options');
             const td = cr('td', { colSpan:3 });
             td.appendChild(add);
