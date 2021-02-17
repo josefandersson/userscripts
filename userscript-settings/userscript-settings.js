@@ -1,7 +1,7 @@
 // ==UserLibrary==
 // @name          Userscript Settings
 // @namespace     https://github.com/josefandersson/userscripts/tree/master/userscript-settings
-// @version       2.4
+// @version       2.5
 // @description   Library for adding a settings popup to userscripts.
 // @author        Josef Andersson
 // ==/UserLibrary==
@@ -18,8 +18,12 @@
 //        - For 'multiple', a default or current value of string "all" selects all options.
 //        - Wider popup, put labels left of input - right now it looks to spread out/chaotic.
 //        - For add change callbacks, add options to only get the changed settings when this node is a section, ie only pop children with changed values.
+//        - Option to add a descriptor/explaination for each option in multi/custom select
+//        - Script info under title (description, version, author etc)
+//        - Escape key equals clicking close button
+//        - Scripts can add buttons that just call any function when clicked, not storing a value (eg. a script wanting to clear data, recalculate something, etc.)
 
-if (typeof UserscriptSettings === 'undefined') {
+if (typeof window.UserscriptSettings === 'undefined') {
     const cr = (tagName, obj) => Object.assign(document.createElement(tagName), obj || {});
 
     /**
@@ -27,7 +31,7 @@ if (typeof UserscriptSettings === 'undefined') {
      * create popup and handle showing and closing settings window, and to
      * get/set values.
      */
-    UserscriptSettings = function UserscriptSettings(settings, savedValues=null) {
+    window.UserscriptSettings = function UserscriptSettings(settings, savedValues=null) {
         this.settings = settings;
 
         this.constructor.vars.node.applySettings(settings);
@@ -175,6 +179,11 @@ if (typeof UserscriptSettings === 'undefined') {
                     input.addEventListener('change', () =>
                         input.classList[this.setUnsavedValue(opts.filter(o =>
                             o.selected).map(o => o.value)) ? 'add' : 'remove']('hasUnsaved'));
+                } else if (this.type === 'list') {
+                    const select = new SettingList(Object.assign({ options:this.options, value:this.currentValue, defaultValue:this.defaultValue }, this.settings || {}));
+                    select.onchange = value =>
+                        input.classList[this.setUnsavedValue(value) ? 'add' : 'remove']('hasUnsaved');
+                    input = select.createElement();
                 } else {
                     switch (this.type) {
                         case "checkbox":
@@ -235,7 +244,6 @@ if (typeof UserscriptSettings === 'undefined') {
                 return !!Object.values(this.children).reduce((t, child) => (loopChildren ? child.forEachChild(cb) : cb(child)) || t, false);
             else
                 return !!cb(this);
-            return false;
         };
 
         /**
@@ -350,6 +358,12 @@ if (typeof UserscriptSettings === 'undefined') {
                     this.defaultValue = descriptor[3] || [this.options[0]];
                     this.currentValue = descriptor[4] || this.defaultValue;
                     coni = 5; break;
+                case 'list':
+                    this.options = descriptor[2];
+                    this.defaultValue = descriptor[3] || null;
+                    this.currentValue = descriptor[4] || this.defaultValue;
+                    this.settings = descriptor[5];
+                    coni = 6; break;
                 default: throw new Error('Unknown setting type ' + descriptor[1]);
             }
 
@@ -474,8 +488,9 @@ if (typeof UserscriptSettings === 'undefined') {
     UserscriptSettings.injectStyle = function() {
         this.vars.injected = true;
         document.head.appendChild(cr('style', { innerHTML:
-`.usstngs { position:fixed;top:0;left:0;bottom:0;right:0;background-color:#4446;z-index:1000000;color:#d0d0d0;font-size:1rem;}
-.usstngs>div {background-color:#1f1f1f;width:fit-content;padding:2px 10px 10px 10px;position:absolute;top:50vh;left:50vw;transform:translate(-50%, -50%);}
+`.usstngs { position:fixed;top:0;left:0;bottom:0;right:0;background-color:#4446;z-index:1000000;color:#d0d0d0 !important;font-size:1rem;}
+.usstngs>div {background-color:#1f1f1f;width:fit-content;padding:2px 10px 10px 10px;position:absolute;top:50vh;left:50vw;transform:translate(-50%, -50%);
+    overflow:scroll;max-height:calc(100vh - 50px);}
 .usstngs h1,.usstngs h2,.usstngs h3,.usstngs h4,.usstngs h5,.usstngs h6{letter-spacing:unset;text-transform:unset;margin:0 0;padding:5px 0;}
 .usstngs h1{font-size:1.5em;text-align:center;color:#516a98;border-bottom:1px solid #516a98;}
 .usstngs h2{font-size:1.8em;color:brown;}
@@ -494,7 +509,16 @@ if (typeof UserscriptSettings === 'undefined') {
 .usstngs p>span{font-size:11px;cursor:pointer;color:#999;margin-left:5px;}
 .usstngs .hasUnsaved {box-shadow:0 0 8px yellow;}
 .usstngs .hiddenAction {display:none;}
-.usstngs .disabledAction {color:red;}` }));
+.usstngs .disabledAction {color:red;}
+table.ytsb-list-setting { counter-reset:row; color:#d0d0d0 !important }
+table.ytsb-list-setting tr:not(.unchecked) { counter-increment:row; }
+table.ytsb-list-setting tr:not(.unchecked) td.ytsb-index::before { content:counter(row); font-size:12px; text-align:center; display:block; font-family:monospace; color:#888; }
+table.ytsb-list-setting td.ytsb-move { display:inline-block; height:1em; }
+table.ytsb-list-setting td.ytsb-move span { color:#888; cursor:pointer; font-size:.7em; height:50%; display:block; overflow:hidden; padding:0 5px; margin:0 -5px; }
+table.ytsb-list-setting td.ytsb-move span:hover { color:#ccc;border-color:brown; }
+table.ytsb-list-setting td.ytsb-move span:first-child::after { content:'▵'; position:relative; bottom:.4em; pointer-events:none; }
+table.ytsb-list-setting td.ytsb-move span:last-child::after { content:'▿'; position:relative; bottom:.4em; }
+table.ytsb-list-setting button.ytsb-add-row { width:100%; }` }));
     };
 
     /**
@@ -507,5 +531,171 @@ if (typeof UserscriptSettings === 'undefined') {
         } else {
             console.log('Nothing to save!')
         }
+    };
+
+
+    /**
+     * Custom select/multiple settings object, more feature rich than normal selects
+     * @param {Object} Options
+     */
+    const SettingList = function SettingList({ options=[], value=null, defaultValue=[], index=true, indexOnlyChecked=true, checkable=true, orderable=false, custom=false }={}) {
+        this.options = options;
+        this.value = value;
+        this.defaultValue = defaultValue;
+
+        this.index = index; // Whether items should display their index number
+        this.indexOnlyChecked = indexOnlyChecked; // Whether only checked items should display index number (requires index and checkable)
+        this.orderable = orderable; // Whether items can be moved up and down
+        this.checkable = checkable; // Whether items can be checked or unchecked
+        this.custom = custom; // Whether custom strings can be added and removed TODO: Not implemented properly yet?
+
+        if (custom) {
+            this.checkable = false; // Can't have both custom and checkable
+            this.options = []; // Can't have both custom and options
+        }
+
+        this.onchange = null;
+        this.items = [];
+    };
+
+    SettingList.prototype.setValue = function(value) {
+        // TODO: Ability to set this setting's value from the outside
+    };
+
+    SettingList.prototype.beginMoving = function(tr, ev) {
+        ev.preventDefault();
+        const btn = ev.target;
+        let rect = tr.getBoundingClientRect();
+
+        const end = () => {
+            clearTimeout(tid);
+            this.element.onmousemove = null;
+            this.element.onmouseleave = null;
+            this.element.onmouseup = null;
+            this.element.style.cursor = '';
+            btn.onmouseleave = null;
+            tr.style.backgroundColor = '';
+        };
+
+        const beginMoving = () => {
+            clearTimeout(tid);
+            btn.onmouseleave = null;
+            this.element.style.cursor = 'move !important';
+            tr.style.backgroundColor = 'brown';
+        };
+        let tid = setTimeout(() => beginMoving(), 300);
+
+        this.element.onmousemove = ev => {
+            const y = ev.clientY;
+            if (y < rect.top - 2) {
+                if (tr.previousElementSibling) {
+                    tr.parentElement.insertBefore(tr, tr.previousElementSibling);
+                    rect = tr.getBoundingClientRect();
+                }
+            } else if (rect.top + rect.height + 2 < y) {
+                if (tr.nextElementSibling) {
+                    tr.parentElement.insertBefore(tr.nextElementSibling, tr);
+                    rect = tr.getBoundingClientRect();
+                }
+            }
+        };
+        btn.onmouseleave = () => { console.log(1);beginMoving()};
+        btn.onmouseup = () => end();
+        this.element.onmouseleave = () => end();
+        this.element.onmouseup = () => {
+            this.adoptValueFromElements();
+            end();
+        };
+    };
+
+    SettingList.prototype.adoptValueFromElements = function() {
+        if (this.checkable) {
+            let checked = [];
+            this.element.querySelectorAll('input[type=checkbox]').forEach(cb => {
+                if (cb.checked)
+                    checked.push(cb.parentElement.parentElement.option);
+            });
+            this.value = checked;
+        } else if (this.orderable || this.custom) {
+            let newValue = [];
+            this.element.querySelectorAll('tr').forEach(tr => newValue.push(tr.option));
+            this.value = newValue;
+        }
+        if (this.onchange)
+            this.onchange(this.value);
+    };
+
+    SettingList.prototype.createElement = function() {
+        this.element = cr('table', { className:'ytsb-list-setting' });
+        let toMake, toCheck;
+        const values = this.value ? this.value : this.defaultValue;
+        toMake = this.custom ? [...values] : [...this.options];
+        if (this.checkable)
+            toCheck = new Set(values);
+        if (this.index)
+            toMake = [...values, ...toMake];
+        toMake = new Set(toMake);
+        toMake.forEach(opt => {
+            const el = cr('tr', { option:opt });
+            if (this.index) {
+                el.appendChild(cr('td', { className:'ytsb-index' }));
+            }
+            if (this.orderable) {
+                const up = cr('span', { className:'ytsb-move' });
+                const down = cr('span', { className:'ytsb-move' });
+                up.onclick = () => {
+                    if (el.previousElementSibling) {
+                        el.parentElement.insertBefore(el, el.previousElementSibling);
+                        this.adoptValueFromElements();
+                    }
+                };
+                down.onclick = () => {
+                    if (el.nextElementSibling) {
+                        el.parentElement.insertBefore(el.nextElementSibling, el);
+                        this.adoptValueFromElements();
+                    }
+                };
+                let td = cr('td', { className:'ytsb-move' });
+                td.appendChild(up); td.appendChild(down); el.appendChild(td);
+                up.addEventListener('mousedown', ev => this.beginMoving(el, ev));
+                down.addEventListener('mousedown', ev => this.beginMoving(el, ev));
+            }
+            let ch;
+            if (this.checkable) {
+                const checked = toCheck.has(opt);
+                if (this.indexOnlyChecked)
+                    el.classList[checked ? 'remove' : 'add']('unchecked');
+                ch = cr('input', { type:'checkbox', checked, onchange: () => {
+                    if (this.indexOnlyChecked)
+                        el.classList[ch.checked ? 'remove' : 'add']('unchecked');
+                    this.adoptValueFromElements();
+                } });
+                const td = cr('td');
+                td.appendChild(ch);
+                el.appendChild(td);
+            }
+            if (this.custom) {
+                const inp = cr('input', { value:opt });
+                inp.onblur = () => console.log('Blur!');
+                const td = cr('td');
+                td.appendChild(inp);
+                el.appendChild(td);
+            } else {
+                el.appendChild(cr('td', { innerText:opt, value:opt, onclick:()=>ch?.click() }));
+            }
+            this.element.appendChild(el);
+        });
+        if (this.custom) {
+            const tr = cr('tr');
+            if (this.index) tr.appendChild(cr('td'));
+            if (this.checkable) tr.appendChild(cr('td'));
+            const add = cr('button', { className:'ytsb-add-row', innerText:'Add row' });
+            add.onclick = () => console.log('Add options');
+            const td = cr('td', { colSpan:3 });
+            td.appendChild(add);
+            tr.appendChild(td);
+            this.element.appendChild(tr);
+        }
+        return this.element;
     };
 }

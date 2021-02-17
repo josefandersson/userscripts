@@ -83,6 +83,20 @@ Example: `["Favorite animals", "multiple", ["Cow", "Donkey", "Zebra", "Rat"], ["
 - `select` values has to exists in `options` or be `null` or `undefined`.
 - `multiple` values has to be arrays of strings (or empty) and all strings have to exist in `options`.
 
+#### list
+
+Parameters: `[title*, type*, options*, default value, current value, settings, conditions]` (_\* is required_)
+Example: `["Fonts", "list", ["Helvetica", "Sans", "Monospace"], ["Sans"], ["Monospace"], { custom:true }]`
+Example: `["Prioritized man", "list", ["Bob", "Henry", "Hans"], null, null, { checkable:false, orderable:true }]`
+
+- `options` parameter is an array of strings with all options in the list.
+- `settings` is an object with these _boolean_ settings:
+  - `index` - items' index numbers will be shown.
+  - `indexOnlyChecked` - only _checked_ items' index numbers will be shown. (Requires `index=true` and `checkable=true`)
+  - `orderable` - items can be moved up and down.
+  - `checkable` - items can be checked or unchecked.
+  - `custom` - custom options (strings) can be added and removed by the user.
+
 #### The conditions parameter
 
 The conditions parameter (available for all types) is used to enable/disable or show/hide setting node and it's children depending on specified conditions. For example one could want a select `Change theme` only to be changeable when a checkbox `Enable theme` is checked.
