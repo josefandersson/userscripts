@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.55
+// @version      1.56
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -1297,6 +1297,35 @@ const settingsDescriptor = {
     };
     mModule.mMetadata.rName = 'Metadata';
     mModule.mMetadata.rDesc = 'Save video metadata: title, uploader, upload date, view count, likes and dislikes.';
+
+
+
+    // ==================
+    // Time Marker Module
+    // ==================
+    //
+    // - Add a moving current time marker to the bar
+    //
+    mModule.mTimeMarker = class mTimeMarker extends mModule {
+        constructor() {
+            super();
+            this.barItem = new BarItem({ color:settings.modules.mTimeMarker.color, group:5, height:settings.modules.mTimeMarker.height, start:0 });
+            Bar.addItem(this.barItem);
+            Page.v.addEventListener('timeupdate', () => this.onTimeUpdate());
+        }
+        onTimeUpdate() {
+            this.barItem.setStartStop(Page.v.currentTime / Page.v.duration);
+            // TODO: Don't use onTimeUpdate, but do requestAnimationFrame, and move position of item directly (not using setStartStop) when change is great enough to look different to not update dom unneccesarily
+        }
+        static registerSettings() {
+            super.registerSettings(true, null, ['Time marker', 'section', {
+                height: ['Height (px)', 'number', 5, null, 1],
+                color: ['Color', 'text', '#986712']
+            }]);
+        }
+    };
+    mModule.mTimeMarker.rName = 'Time Marker';
+    mModule.mTimeMarker.rDesc = 'Add a moving current time marker to the bar.';
 
 
 
