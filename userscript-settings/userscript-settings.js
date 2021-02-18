@@ -1,7 +1,7 @@
 // ==UserLibrary==
 // @name          Userscript Settings
 // @namespace     https://github.com/josefandersson/userscripts/tree/master/userscript-settings
-// @version       2.6
+// @version       2.6a
 // @description   Library for adding a settings popup to userscripts.
 // @author        Josef Andersson
 // ==/UserLibrary==
@@ -16,11 +16,13 @@
 //        - UserscriptSettings.addOnChange() without path could use this.settings to add listeners to only sections added by this instance.
 //        - Conditions are not properly updated when popup opens. (see colors and randomize colors in example)
 //        - For 'multiple', a default or current value of string "all" selects all options.
+//        - Add color input, where it displays the input color live
 //        - For add change callbacks, add options to only get the changed settings when this node is a section, ie only pop children with changed values.
 //        - Option to add a descriptor/explaination for each option in multi/custom select
 //        - Script info under title (description, version, author etc)
 //        - Escape key equals clicking close button
 //        - Scripts can add buttons that just call any function when clicked, not storing a value (eg. a script wanting to clear data, recalculate something, etc.)
+//        - Using 1rem for font size means some sites don't work well, eg. youtube has a very small 1rem size to the point where it's hard to read
 
 if (typeof window.UserscriptSettings === 'undefined') {
     const cr = (tagName, obj) => Object.assign(document.createElement(tagName), obj || {});
@@ -509,7 +511,7 @@ if (typeof window.UserscriptSettings === 'undefined') {
 .usstngs nav button{background-color:#516a98;border:1px solid #2f3848;color:#d0d0d0;font-weight:bold;}
 .usstngs nav button:hover{background-color:#2f3848;}
 .usstngs>table>p{font-size:20px;}
-.usstngs label{font-size:.8em;display:inline;cursor:pointer;white-space:nowrap;color:#a7a7a7;}
+.usstngs label{font-size:.8em;display:inline;cursor:pointer;white-space:nowrap;color:#a7a7a7;vertical-align:sub;}
 .usstngs label::after{content:':'}
 .usstngs input[type=checkbox],.usstngs select,.usstngs button{cursor:pointer;}
 .usstngs input,.usstngs textarea,.usstngs button,.usstngs select{background-color:#292929;border:1px solid #585858;color:#d0d0d0;}
