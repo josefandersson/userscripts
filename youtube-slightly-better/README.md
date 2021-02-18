@@ -14,6 +14,7 @@ A bitter attempt at making the YouTube experience better. This script adds a few
 | Trim | Set trims for when video is autoplayed (eg. good for music videos in playlists). Video parts not within trims will be skipped. | y | yes |
 | Copy | Copy video url with current timestamp. | v | yes |
 | Notes | Add notes at timestamps in videos. | n | yes |
+| Time Marker | Add a moving current time marker to the bar. | - | yes |
 | History | Remember all watched videos and print how many times current video has been watched. | | no |
 | Media Session | Fix media keys integration. | | no |
 | Metadata | Save video metadata: title, uploader, etc. | | no |

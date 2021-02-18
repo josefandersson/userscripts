@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.57
+// @version      1.58
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -235,22 +235,27 @@ const settingsDescriptor = {
             let tid, prevClick;
             const handler = ev => {
                 ev.preventDefault();
-                if (this.doubleClicks) {
-                    clearTimeout(tid);
-                    const now = Date.now();
-                    if (now < prevClick + 200) {
-                        this.onClick(ev.button, true);
+                if (this.onClick) {
+                    if (this.doubleClicks) {
+                        clearTimeout(tid);
+                        const now = Date.now();
+                        if (now < prevClick + 200) {
+                            this.onClick(ev.button, true);
+                        } else {
+                            prevClick = now;
+                            tid = setTimeout(() => this.onclick(ev.button), DOUBLE_CLICK_MS);
+                        }
                     } else {
-                        prevClick = now;
-                        tid = setTimeout(() => this.onclick(ev.button), DOUBLE_CLICK_MS);
+                        this.onClick(ev.button);
                     }
-                } else {
-                    this.onClick(ev.button);
                 }
             };
             this.el.oncontextmenu = handler;
             this.el.onclick = handler;
-            this.el.onmouseenter = () => Popup.create({ target:this.el, text:this.text });
+            this.el.onmouseenter = () => {
+                if (this.text)
+                    Popup.create({ target:this.el, text:this.text });
+            }
         }
         remove() {
             Bar.removeItem(this);
