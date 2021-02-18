@@ -1,7 +1,7 @@
 // ==UserLibrary==
 // @name          Userscript Settings
 // @namespace     https://github.com/josefandersson/userscripts/tree/master/userscript-settings
-// @version       2.6a
+// @version       2.6b
 // @description   Library for adding a settings popup to userscripts.
 // @author        Josef Andersson
 // ==/UserLibrary==
@@ -26,6 +26,7 @@
 
 if (typeof window.UserscriptSettings === 'undefined') {
     const cr = (tagName, obj) => Object.assign(document.createElement(tagName), obj || {});
+    const arrEq = (arr1, arr2) => arr1 instanceof Array && arr2 instanceof Array && arr1.length === arr2.length && arr1.every((v,i) => v === arr2[i]);
 
     /**
      * Global settings class. Create one instance per userscript. Used to
@@ -314,7 +315,7 @@ if (typeof window.UserscriptSettings === 'undefined') {
         this.setUnsavedValue = newVal => {
             this.onUnsavedChange.forEach(cb => cb(newVal));
             this.unsavedValue = newVal;
-            if (this.unsavedValue === this.currentValue) {
+            if (this.unsavedValue === this.currentValue || arrEq(this.unsavedValue, this.currentValue)) {
                 delete this.unsavedValue;
                 return false;
             }
