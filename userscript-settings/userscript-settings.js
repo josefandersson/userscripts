@@ -1,7 +1,7 @@
 // ==UserLibrary==
 // @name          Userscript Settings
 // @namespace     https://github.com/josefandersson/userscripts/tree/master/userscript-settings
-// @version       2.5a
+// @version       2.6
 // @description   Library for adding a settings popup to userscripts.
 // @author        Josef Andersson
 // ==/UserLibrary==
@@ -16,7 +16,6 @@
 //        - UserscriptSettings.addOnChange() without path could use this.settings to add listeners to only sections added by this instance.
 //        - Conditions are not properly updated when popup opens. (see colors and randomize colors in example)
 //        - For 'multiple', a default or current value of string "all" selects all options.
-//        - Wider popup, put labels left of input - right now it looks to spread out/chaotic.
 //        - For add change callbacks, add options to only get the changed settings when this node is a section, ie only pop children with changed values.
 //        - Option to add a descriptor/explaination for each option in multi/custom select
 //        - Script info under title (description, version, author etc)
@@ -162,15 +161,15 @@ if (typeof window.UserscriptSettings === 'undefined') {
          * also create element for child nodes and add to this node's element.
          */
         this.createElement = (depth=1, parentPath='settings') => {
-            let element = cr('div');
+            let element = cr(this.type === 'section' ? 'table' : 'tr');
             const thisPath = `${parentPath}${this.key||''}`;
             if (this.type === 'section') {
                 element.classList.add('usstngs-sec');
                 const title = 1 < depth ? this.title : 'Userscript Settings';
-                element.appendChild(cr(`h${depth}`, { innerText:title }));
+                element.appendChild(cr('td', { colSpan:2 })).appendChild(cr(`h${depth}`, { innerText:title }));
                 Object.values(this.children).forEach(c => element.appendChild(c.createElement(depth+1, `${thisPath}-`)));
             } else {
-                element.appendChild(cr('label', { innerText:this.title, htmlFor:thisPath }));
+                element.appendChild(cr('td')).appendChild(cr('label', { innerText:this.title, htmlFor:thisPath }));
                 let input, key;
                 if (this.type === 'multiple') {
                     input = cr('select', { id:thisPath, multiple:true });
@@ -208,7 +207,12 @@ if (typeof window.UserscriptSettings === 'undefined') {
                     }
                     input.addEventListener('change', () => input.classList[this.setUnsavedValue(input[key]) ? 'add' : 'remove']('hasUnsaved'));
                 }
-                element.appendChild(input);
+                element.appendChild(cr('td')).appendChild(input);
+            }
+            if (this.type === 'section' && depth !== 1) {
+                let tr = cr('tr');
+                tr.appendChild(cr('td', { colSpan:2 })).appendChild(element);
+                element = tr;
             }
             this.element = element; // TODO: Delete this.element when popup closes
             return element;
@@ -488,9 +492,8 @@ if (typeof window.UserscriptSettings === 'undefined') {
     UserscriptSettings.injectStyle = function() {
         this.vars.injected = true;
         document.head.appendChild(cr('style', { innerHTML:
-`.usstngs { position:fixed;top:0;left:0;bottom:0;right:0;background-color:#4446;z-index:1000000;color:#d0d0d0 !important;font-size:1rem;}
-.usstngs>div {background-color:#1f1f1f;width:fit-content;padding:2px 10px 10px 10px;position:absolute;top:50vh;left:50vw;transform:translate(-50%, -50%);
-    overflow:scroll;max-height:calc(100vh - 50px);}
+`.usstngs {position:fixed;top:0;left:0;bottom:0;right:0;background-color:#4446;z-index:1000000;color:#d0d0d0 !important;font-size:1rem;font-family:sans-serif;}
+.usstngs>table {display:block;background-color:#1f1f1f;width:fit-content;padding:2px 10px 10px 10px;position:absolute;top:50vh;left:50vw;transform:translate(-50%, -50%);max-height:90vh;overflow:scroll;}
 .usstngs h1,.usstngs h2,.usstngs h3,.usstngs h4,.usstngs h5,.usstngs h6{letter-spacing:unset;text-transform:unset;margin:0 0;padding:5px 0;}
 .usstngs h1{font-size:1.5em;text-align:center;color:#516a98;border-bottom:1px solid #516a98;}
 .usstngs h2{font-size:1.8em;color:brown;}
@@ -498,19 +501,24 @@ if (typeof window.UserscriptSettings === 'undefined') {
 .usstngs h4{font-size:1.2em;}
 .usstngs h5{font-size:1.1em;}
 .usstngs h6{font-size:1em;}
-.usstngs>div div.usstngs-sec{margin:10px 0 10px 4px;padding-left:4px;border-left:2px solid brown;}
-.usstngs nav{border-top:1px solid #516a98;padding-top:5px;}
+.usstngs>table .usstngs-sec{margin:10px 0 10px 4px;padding-left:4px;border-left:2px solid brown;}
+.usstngs>table .usstngs-sec{border-top:2px solid brown;}
+.usstngs-sec>tr>td:first-child{text-align:right;vertical-align:baseline;}
+.usstngs-sec>tr>td:last-child{text-align:left;width:100%;}
+.usstngs nav{border-top:1px solid #516a98;padding-top:5px;text-align:center;}
 .usstngs nav button{background-color:#516a98;border:1px solid #2f3848;color:#d0d0d0;font-weight:bold;}
 .usstngs nav button:hover{background-color:#2f3848;}
-.usstngs>div>p{font-size:20px;}
-.usstngs label{font-size:11px;display:block;cursor:pointer;}
-.usstngs input,.usstngs select,.usstngs button{cursor:pointer;}
-.usstngs>div>div:last-child{margin:8px 0 0 0;}
+.usstngs>table>p{font-size:20px;}
+.usstngs label{font-size:.8em;display:inline;cursor:pointer;white-space:nowrap;color:#a7a7a7;}
+.usstngs label::after{content:':'}
+.usstngs input[type=checkbox],.usstngs select,.usstngs button{cursor:pointer;}
+.usstngs input,.usstngs textarea,.usstngs button,.usstngs select{background-color:#292929;border:1px solid #585858;color:#d0d0d0;}
+.usstngs>table>table:last-child{margin:8px 0 0 0;}
 .usstngs p>span{font-size:11px;cursor:pointer;color:#999;margin-left:5px;}
 .usstngs .hasUnsaved {box-shadow:0 0 8px yellow;}
 .usstngs .hiddenAction {display:none;}
 .usstngs .disabledAction {color:red;}
-table.usstngs-list-setting { counter-reset:row; color:#d0d0d0 !important }
+table.usstngs-list-setting {counter-reset:row;color:#d0d0d0 !important;font-size:.9em;background-color:#292929;border:1px solid #585858;}
 table.usstngs-list-setting tr:not(.unchecked) { counter-increment:row; }
 table.usstngs-list-setting tr:not(.unchecked) td.usstngs-index::before { content:counter(row); font-size:12px; text-align:center; display:block; font-family:monospace; color:#888; }
 table.usstngs-list-setting td.usstngs-move { display:inline-block; height:1em; }
