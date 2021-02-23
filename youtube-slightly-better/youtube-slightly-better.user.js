@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.58
+// @version      1.59
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
 // @icon         https://youtube.com/favicon.ico
-// @require      https://raw.githubusercontent.com/josefandersson/userscripts/master/userscript-settings/userscript-settings.js
+// @require      https://raw.githubusercontent.com/josefandersson/userscripts/master/userscript-settings/userscript-settings.js##############
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
@@ -219,7 +219,7 @@ const settingsDescriptor = {
     };
 
     class BarItem {
-        constructor({ color='red', doubleClicks=false, group=0, height=9, onClick, start, stop=null, text='' }={}) {
+        constructor({ color='red', doubleClicks=false, group=0, height=9, onClick=null, start, stop=null, text=null }={}) {
             this.doubleClicks = doubleClicks;
             this.group = group;
             this.onClick = onClick;
@@ -256,6 +256,7 @@ const settingsDescriptor = {
                 if (this.text)
                     Popup.create({ target:this.el, text:this.text });
             }
+            this.el.style.zIndex = 1000 + this.group;
         }
         remove() {
             Bar.removeItem(this);
@@ -370,14 +371,19 @@ const settingsDescriptor = {
             });
         }
         onKey(ev) { ev.preventDefault(); }
+        // If moduleSettings is true then add condition to only show section when module is enabled
         static registerSettings(defaultEnabled=false, moduleKeys=null, moduleSettings=null) {
             settingsDescriptor.ytsb[2].enabledModules[2].push(this.rName);
             if (defaultEnabled)
                 settingsDescriptor.ytsb[2].enabledModules[3].push(this.rName);
             if (moduleKeys)
                 Object.assign(settingsDescriptor.ytsb[2].keybinds[2], moduleKeys);
-            if (moduleSettings)
+            if (moduleSettings) {
+                console.log(this.rName, moduleSettings[3])
+                if (moduleSettings[3] === true)
+                    moduleSettings[3] = [{ path:['/', 'ytsb', 'enabledModules'], eval:v=>v.indexOf(this.rName)===-1, action:'disable' }]
                 settingsDescriptor.ytsb[2].modules[2][this.name] = moduleSettings;
+            }
         }
     }
 
@@ -426,7 +432,7 @@ const settingsDescriptor = {
                 playbackRateStep: ['Playback rate step', 'number', 0.05],
                 minPlaybackRate: ['Minimum playback rate', 'number', 0.1],
                 maxPlaybackRate: ['Maximum playback rate', 'number', 3],
-            }, [{ path:['/', 'ytsb', 'enabledModules'], eval:v=>-1<v.indexOf('Playback Rate'), action:'hide' }]]);
+            }, true]);
         }
     };
     mModule.mPlaybackRate.rName = 'Playback Rate';
@@ -621,7 +627,7 @@ const settingsDescriptor = {
                 goToTimestamp: ['Go to timestamp', 'text', 'g']
             },['Go To Timestamp', 'section', {
                 playAfterSeek: ['Play video after seek', 'checkbox', false]
-            }]);
+            }, true]);
         }
     };
     mModule.mGoToTimestamp.rName = 'Go To Timestamp';
@@ -634,7 +640,7 @@ const settingsDescriptor = {
     // =====================
     //
     // - Remember all watched videos and print how many times current video has been watched.
-    //
+    // TODO: Right click to edit number of watches?
     mModule.mHistory = class mHistory extends mModule {
         constructor() {
             super();
@@ -719,7 +725,7 @@ const settingsDescriptor = {
         static registerSettings() {
             super.registerSettings(false, null, ['History', 'section', {
                 minPercentageBeforeSeen: ['Minimum percentage before counted as seen', 'number', .8,, 0, 1, .05],
-            }, [{ path:['/', 'ytsb', 'enabledModules'], eval:v=>-1<v.indexOf('Playback Rate'), action:'hide' }]]);
+            }, true]);
         }
     };
     mModule.mHistory.rName = 'History';
@@ -809,6 +815,7 @@ const settingsDescriptor = {
     // - With multiple trims, it will skip video between trims
     // - One trim fully within another trim will untrim (skip) that part of the parent trim
     // - When trims overlap but aren't fully within, the trims will add together
+    // - FIXME: When removing trims, the wrong barItem is removed, yet the correct trim is removed from storage (ie looks like another trim was removed when in reality the still wanted trim is not gone)
     // - TODO: Use video speed in calculating next trim, also recalc when video speed changes
     //   TODO: Before skipping to end of video/next vid after trim, check if video is on repeat, if so, seek to first trim again
     //   TODO: Can't seem to start trim at start of video?
@@ -833,8 +840,8 @@ const settingsDescriptor = {
             this.onChange();
         }
         onSeeking() {
-            // TODO: Only set active false if no within a trim
-            this.setActive(false);
+            if (!this.trims.find(trim => trim[0] <= Page.v.currentTime && Page.v.currentTime <= trim[1]))
+                this.setActive(false);
         }
         seekTrim(index) {
             if (this.trims[index]) {
@@ -843,7 +850,7 @@ const settingsDescriptor = {
                 this.setActive(true);
             }
         }
-        calculateCurrent() {
+        calculateAction() {
             let currentTime = Page.v.currentTime;
             let startInProx = false;
             const inProx = this.trims.find(trim => (startInProx = prox(currentTime, trim[0], TRIM_PROXIMITY)) || prox(currentTime, trim[1], TRIM_PROXIMITY));
@@ -861,7 +868,7 @@ const settingsDescriptor = {
                     // Else if crossing another trim
                         // Merge trims or cut?
                     // Else
-                        const trim = [this.current[0], currentTime]; // TODO: Make sure the order is correct
+                        const trim = this.current[0] < currentTime ? [this.current[0], currentTime] : [currentTime, this.current[0]];
                         this.trims.push(trim);
                         const item = new BarItem({ color:'#aa3', height:4, onClick:btn => {
                             switch (btn) {
@@ -918,10 +925,10 @@ const settingsDescriptor = {
                 this.trims.splice(i, 1);
                 this.updateText();
             } else {
-                if (start == null) {
+                if (start != null) {
                     // TODO: Change start for trim and barItem
                 }
-                if (stop == null) {
+                if (stop != null) {
                     // TODO: Change stop for trim and barItem
                 }
             }
@@ -948,7 +955,7 @@ const settingsDescriptor = {
         }
         onKey(ev) {
             super.onKey(ev);
-            this.calculateCurrent();
+            this.calculateAction();
         }
         saveTrims() {
             this.calculateNextSkip();
@@ -965,7 +972,8 @@ const settingsDescriptor = {
                 this.trims.sort((a, b) => a[0] - b[0]);
                 Page.v.currentTime = this.trims[0][0];
             }
-            // TODO: If url contains time then disable trims when video loads
+            if (Page.time)
+                this.setActive(false);
             this.calculateNextSkip();
             const createBarItem = (trim, i) => {
                 const item = new BarItem({ color:'#aa3', height:4, onClick:btn => {
@@ -983,7 +991,7 @@ const settingsDescriptor = {
         
         
         handleOnClick() {
-            this.calculateCurrent();
+            this.calculateAction();
             return;
         }
         onTimeUpdate() {
@@ -992,16 +1000,19 @@ const settingsDescriptor = {
             if (this.nextSkip && this.nextSkip <= Page.v.currentTime) {
                 this.calculateNextSkip();
                 if (this.nextSkip) {
-                    this.trims.sort((a, b) => a[0] - b[0]);
+                    this.trims.sort((a, b) => a[0] - b[0]); // TODO: Sort only has to be done whenever trim list updates or any trim start/stop updates
                     Page.v.currentTime = this.trims.find(trim => Page.v.currentTime < trim[0])[0];
+                } else if (Page.v.loop) {
+                    Page.v.currentTime = this.trims[0][0];
+                    this.calculateNextSkip();
                 } else {
                     Page.v.currentTime = Page.v.duration;
                 }
             }
         }
         calculateNextSkip() {
-            this.trims.sort((a, b) => a[1] - b[1]);
-            const next = this.trims.find(trim => Page.v.currentTime < trim[1]);
+            this.trims.sort((a, b) => a[1] - b[1]); // TODO: Sort only has to be done whenever trim list updates or any trim start/stop updates
+            const next = this.trims.find(trim => Page.v.currentTime <= trim[1]);
             this.nextSkip = next ? next[1] : null;
         }
 
@@ -1297,7 +1308,7 @@ const settingsDescriptor = {
         static registerSettings() {
             super.registerSettings(false, null, ['Metadata', 'section', {
                 playlists: ['Process playlists', 'checkbox', true]
-            }]); //[{ path:['/', 'ytsb', 'enabledModules'], eval:v=>-1<v.indexOf('Metadata'), action:'hide' }]
+            }, true]);
         }
     };
     mModule.mMetadata.rName = 'Metadata';
@@ -1326,7 +1337,7 @@ const settingsDescriptor = {
             super.registerSettings(true, null, ['Time marker', 'section', {
                 height: ['Height (px)', 'number', 5, null, 1],
                 color: ['Color', 'text', '#986712']
-            }]);
+            }, true]);
         }
     };
     mModule.mTimeMarker.rName = 'Time Marker';
@@ -1468,6 +1479,7 @@ const settingsDescriptor = {
     // Create settings instance
     const sObj = new UserscriptSettings(settingsDescriptor, { ytsb:GM_getValue('settings') });
     sObj.addOnChange(vals => GM_setValue('settings', settings = vals), 'ytsb');
+    sObj.setFontSizeScale(1.4);
 
     // Get current settings, including default values
     settings = Object.assign({}, UserscriptSettings.getValues('ytsb'));
