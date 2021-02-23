@@ -55,7 +55,6 @@ if (typeof window.UserscriptSettings === 'undefined') {
      */
     UserscriptSettings.Node = function Node(key=null, descriptor=null) {
         this.children = {};
-        this.currentValue
         this.descriptor = descriptor;
         this.index = 0;
         this.key = key;
@@ -142,17 +141,17 @@ if (typeof window.UserscriptSettings === 'undefined') {
                         }
                         if (triggered !== !!con.invert) {
                             if (con.action === 'disable') {
-                                this.element.disabled = true;
-                                this.element.classList.add('disabledAction');
+                                this.element.children[1].children[0].disabled = true;
+                                this.element.classList.add('usstngs-disabled');
                             } else {
-                                this.element.classList.add('hiddenAction');
+                                this.element.classList.add('usstngs-hidden');
                             }
                         } else {
                             if (con.action === 'disable') {
-                                this.element.disabled = false;
-                                this.element.classList.remove('disabledAction');
+                                this.element.children[1].children[0].disabled = false;
+                                this.element.classList.remove('usstngs-disabled');
                             } else {
-                                this.element.classList.remove('hiddenAction');
+                                this.element.classList.remove('usstngs-hidden');
                             }
                         }
                     });
@@ -169,8 +168,15 @@ if (typeof window.UserscriptSettings === 'undefined') {
             const thisPath = `${parentPath}${this.key||''}`;
             if (this.type === 'section') {
                 element.classList.add('usstngs-sec');
-                const title = 1 < depth ? this.title : 'Userscript Settings';
-                element.appendChild(cr('td', { colSpan:2 })).appendChild(cr(`h${depth}`, { innerText:title }));
+                if (depth === 1) {
+                    element.appendChild(cr('td', { colSpan:2 })).appendChild(cr(`h1`, { innerText:'Userscript Settings' }));
+                } else {
+                    const td = cr('td', { colSpan:2 });
+                    td.appendChild(cr(`h${depth}`, { innerText:this.title }));
+                    // TODO: Make the section collapse when border is clicked instead of this v
+                    td.appendChild(cr('span', { onclick:ev => ev.target.parentElement.parentElement.classList.toggle('collapsed') }));
+                    element.appendChild(td);
+                }
                 Object.values(this.children).forEach(c => element.appendChild(c.createElement(depth+1, `${thisPath}-`)));
             } else {
                 element.appendChild(cr('td')).appendChild(cr('label', { innerText:this.title, htmlFor:thisPath }));
@@ -181,11 +187,11 @@ if (typeof window.UserscriptSettings === 'undefined') {
                         input.appendChild(cr('option', { value, innerText:value, selected:-1<this.currentValue.indexOf(value) })));
                     input.addEventListener('change', () =>
                         input.classList[this.setUnsavedValue(opts.filter(o =>
-                            o.selected).map(o => o.value)) ? 'add' : 'remove']('hasUnsaved'));
+                            o.selected).map(o => o.value)) ? 'add' : 'remove']('usstngs-unsaved'));
                 } else if (this.type === 'list') {
                     const select = new SettingList(Object.assign({ options:this.options, value:this.currentValue, defaultValue:this.defaultValue }, this.settings || {}));
                     select.onchange = value =>
-                        input.classList[this.setUnsavedValue(value) ? 'add' : 'remove']('hasUnsaved');
+                        input.classList[this.setUnsavedValue(value) ? 'add' : 'remove']('usstngs-unsaved');
                     input = select.createElement();
                 } else {
                     switch (this.type) {
@@ -209,7 +215,7 @@ if (typeof window.UserscriptSettings === 'undefined') {
                                 input.appendChild(cr('option', { value, innerText:value, selected:this.currentValue === value })));
                             key = 'value'; break;
                     }
-                    input.addEventListener('change', () => input.classList[this.setUnsavedValue(input[key]) ? 'add' : 'remove']('hasUnsaved'));
+                    input.addEventListener('change', () => input.classList[this.setUnsavedValue(input[key]) ? 'add' : 'remove']('usstngs-unsaved'));
                 }
                 element.appendChild(cr('td')).appendChild(input);
             }
@@ -448,12 +454,12 @@ if (typeof window.UserscriptSettings === 'undefined') {
         const container = this.vars.node.createElement();
 
         // Check all connditions
-        // this.vars.node.forEachChild(c => {
-        //     if (c.type === 'section') {
-        //     }
-        //     console.log('Looping', c.key);
-        //     c.onUnsavedChange.forEach(cb => cb(c.currentValue))
-        // });
+        const initCons = c => {
+            if (c.type === 'section')
+                c.forEachChild(initCons);
+            c.onUnsavedChange.forEach(cb => cb(c.currentValue))
+        };
+        this.vars.node.forEachChild(initCons);
 
         // Create button elements
         const btns = cr('nav');
@@ -519,6 +525,14 @@ if (typeof window.UserscriptSettings === 'undefined') {
 .usstngs h6{font-size:1em;}
 .usstngs>table .usstngs-sec{margin:10px 0 10px 4px;padding-left:4px;border-left:2px solid brown;}
 .usstngs>table .usstngs-sec{border-top:2px solid brown;}
+.usstngs-sec>td>span{cursor:pointer;font-size:0.6em;padding:5px 0 10px 0;margin:-10px 0;position:absolute;color:gray;display:none;}
+.usstngs-sec>td>span:hover{color:brown;}
+.usstngs-sec>td:hover>span{display:initial;}
+.usstngs-sec>td>span::before{content:'collapse';}
+.usstngs-sec.collapsed>td>span::before{content:'expand';}
+.usstngs-sec.collapsed{border-color:green !important;}
+.usstngs-sec.collapsed>td{color:green !important;}
+.usstngs-sec.collapsed>tr{display:none;}
 .usstngs-sec>tr>td:first-child{text-align:right;vertical-align:baseline;}
 .usstngs-sec>tr>td:last-child{text-align:left;width:100%;}
 .usstngs nav{border-top:1px solid #516a98;padding-top:5px;text-align:center;}
@@ -531,9 +545,10 @@ if (typeof window.UserscriptSettings === 'undefined') {
 .usstngs input,.usstngs textarea,.usstngs button,.usstngs select{background-color:#292929;border:1px solid #585858;color:#d0d0d0;}
 .usstngs>table>table:last-child{margin:8px 0 0 0;}
 .usstngs p>span{font-size:11px;cursor:pointer;color:#999;margin-left:5px;}
-.usstngs .hasUnsaved {box-shadow:0 0 8px yellow;}
-.usstngs .hiddenAction {display:none;}
-.usstngs .disabledAction {color:red;}
+.usstngs .usstngs-unsaved{box-shadow:0 0 8px yellow;}
+.usstngs .usstngs-hidden{display:none;}
+.usstngs .usstngs-disabled label{color:#505050;}
+.usstngs-disabled input,.usstngs-disabled textarea,.usstngs-disabled button,.usstngs-disabled select,.usstngs-disabled label{cursor:initial !important;}
 table.usstngs-list-setting {counter-reset:row;color:#d0d0d0 !important;font-size:.9em;background-color:#292929;border:1px solid #585858;}
 table.usstngs-list-setting tr:not(.unchecked) { counter-increment:row; }
 table.usstngs-list-setting tr:not(.unchecked) td.usstngs-index::before { content:counter(row); font-size:12px; text-align:center; display:block; font-family:monospace; color:#888; }
