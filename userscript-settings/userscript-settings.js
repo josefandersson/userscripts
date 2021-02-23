@@ -1,7 +1,7 @@
 // ==UserLibrary==
 // @name          Userscript Settings
 // @namespace     https://github.com/josefandersson/userscripts/tree/master/userscript-settings
-// @version       2.6c
+// @version       2.7
 // @description   Library for adding a settings popup to userscripts.
 // @author        Josef Andersson
 // ==/UserLibrary==
@@ -22,7 +22,7 @@
 //        - Script info under title (description, version, author etc)
 //        - Escape key equals clicking close button
 //        - Scripts can add buttons that just call any function when clicked, not storing a value (eg. a script wanting to clear data, recalculate something, etc.)
-//        - Using 1rem for font size means some sites don't work well, eg. youtube has a very small 1rem size to the point where it's hard to read
+//        - What should happen when the node in a condition is disabled/hidden by it's own condition? Propegate the disable/hide action?
 
 if (typeof window.UserscriptSettings === 'undefined') {
     const cr = (tagName, obj) => Object.assign(document.createElement(tagName), obj || {});
@@ -127,36 +127,33 @@ if (typeof window.UserscriptSettings === 'undefined') {
          * Setup conditions. Should be called ONCE after all nodes have been created.
          */
         this.setupConditions = () => {
-            if (this.type === 'section') {
-                this.forEachChild(c => c.setupConditions());
-            } else if (this.conditions) {
+            if (this.type === 'section')
+                this.forEachChild(c => c.setupConditions(), false);
+            if (this.conditions) {
                 this.conditions.forEach(con => {
                     const ref = this.parent.find(...con.path);
                     ref.addOnUnsavedChange(newVal => {
-                        let triggered = false;
-                        if (con.eval) {
-                            triggered = con.eval(newVal);
-                        } else {
-                            triggered = newVal === con.value;
-                        }
-                        if (triggered !== !!con.invert) {
-                            if (con.action === 'disable') {
-                                this.element.children[1].children[0].disabled = true;
-                                this.element.classList.add('usstngs-disabled');
-                            } else {
-                                this.element.classList.add('usstngs-hidden');
-                            }
-                        } else {
-                            if (con.action === 'disable') {
-                                this.element.children[1].children[0].disabled = false;
-                                this.element.classList.remove('usstngs-disabled');
-                            } else {
-                                this.element.classList.remove('usstngs-hidden');
-                            }
-                        }
+                        let triggered = con.eval ? con.eval(newVal) : newVal === con.value;
+                        if (con.action === 'disable')
+                            this.setDisabled(triggered !== !!con.invert);
+                        else
+                            this.element.classList[triggered !== !!con.invert ? 'add' : 'remove']('usstngs-hidden');
                     });
                 });
             }
+        };
+
+        /**
+         * Set whether this node should be disabled or not.
+         * If section, all children will be disabled.
+         * @param {Boolean} disabled
+         */
+        this.setDisabled = disabled => {
+            if (this.type === 'section')
+                this.forEachChild(c => c.setDisabled(disabled), false);
+            else
+                this.element.children[1].children[0].disabled = disabled;
+            this.element.classList[disabled ? 'add' : 'remove']('usstngs-disabled');
         };
 
         /**
@@ -548,7 +545,8 @@ if (typeof window.UserscriptSettings === 'undefined') {
 .usstngs .usstngs-unsaved{box-shadow:0 0 8px yellow;}
 .usstngs .usstngs-hidden{display:none;}
 .usstngs .usstngs-disabled label{color:#505050;}
-.usstngs-disabled input,.usstngs-disabled textarea,.usstngs-disabled button,.usstngs-disabled select,.usstngs-disabled label{cursor:initial !important;}
+.usstngs-disabled label{cursor:initial !important;}
+.usstngs-disabled input,.usstngs-disabled textarea,.usstngs-disabled button,.usstngs-disabled select{cursor:initial !important;background-color:#232323;border-color:#2d2d2d;color:#505050;}
 table.usstngs-list-setting {counter-reset:row;color:#d0d0d0 !important;font-size:.9em;background-color:#292929;border:1px solid #585858;}
 table.usstngs-list-setting tr:not(.unchecked) { counter-increment:row; }
 table.usstngs-list-setting tr:not(.unchecked) td.usstngs-index::before { content:counter(row); font-size:12px; text-align:center; display:block; font-family:monospace; color:#888; }
@@ -577,6 +575,7 @@ table.usstngs-list-setting button.usstngs-add-row { width:100%; }` }));
      * Custom select/multiple settings object, more feature rich than normal selects
      * See the 'list' settings type in readme.
      * @param {Object} Options
+     * TODO: Handle usstngs-disabled on parent<parent<
      */
     const SettingList = function SettingList({ options=[], value=null, defaultValue=[], index=true, indexOnlyChecked=true, checkable=true, orderable=false, custom=false }={}) {
         this.options = options;
