@@ -1,7 +1,7 @@
 // ==UserLibrary==
 // @name          Userscript Settings
 // @namespace     https://github.com/josefandersson/userscripts/tree/master/userscript-settings
-// @version       2.6b
+// @version       2.6c
 // @description   Library for adding a settings popup to userscripts.
 // @author        Josef Andersson
 // ==/UserLibrary==
@@ -44,6 +44,7 @@ if (typeof window.UserscriptSettings === 'undefined') {
         this.show = () => this.constructor.show();
         this.getValues = (...path) => this.constructor.getValues(...path);
         this.addOnChange = (cb, ...path) => this.constructor.addOnChange(cb, ...path);
+        this.setFontSizeScale = scale => this.constructor.setFontSizeScale(scale);
     };
 
     /**
@@ -386,6 +387,7 @@ if (typeof window.UserscriptSettings === 'undefined') {
         element: null,
         injected: false,
         node: new UserscriptSettings.Node(),
+        fontSizeScale: 1.0,
     };
 
     /**
@@ -426,6 +428,16 @@ if (typeof window.UserscriptSettings === 'undefined') {
     };
 
     /**
+     * Set scale of font size for widget. On some sites (eg. YouTube) the default scale is significantly smaller than on others.
+     * @param {Number} scale Scale (1.0 is default)
+     */
+    UserscriptSettings.setFontSizeScale = function(scale=1) {
+        this.vars.fontSizeScale = scale;
+        if (this.vars.element)
+            this.vars.element.style.fontSize = `${scale}rem`;
+    };
+
+    /**
      * Show the settings popup.
      */
     UserscriptSettings.show = function() {
@@ -460,6 +472,7 @@ if (typeof window.UserscriptSettings === 'undefined') {
                 this.hide();
         });
         this.vars.element = background;
+        this.vars.element.style.fontSize = `${this.vars.fontSizeScale}rem`;
 
         // Add elements to DOM
         document.body.appendChild(background);
