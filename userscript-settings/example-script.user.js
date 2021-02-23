@@ -20,12 +20,15 @@ const settings = new UserscriptSettings({
         mode: ["Mode", "select", ["Single", "Multiple", "Auto"]],
         appearance: ["Appearance", "section", {
             useTheme: ["Use theme", "checkbox", true],
-            colors: ["Colors", "multiple", ["Black", "Brown", "Green", "Orange", "Purple"], ["Brown", "Orange"], ["Purple"], [{ path:["useTheme"], value:false, action:"disable" }]],
-            randomColors: ["Randomize colors", "checkbox", false,, [{ path:["colors"], eval:v=>!!v.length, action:"hide" }]]
+            colors: ["Colors", "list", ["Black", "Brown", "Green", "Orange", "Purple"], ["Brown", "Orange"], ["Purple"], { orderable:true }, [{ path:["useTheme"], value:false, action:"disable" }]], // Disable input if Use theme is true
+            randomColors: ["Randomize colors", "checkbox", false,, [{ path:["colors"], eval:v=>!!v.length }]] // Hide option if Colors list is not empty
         }],
-        hideDate: ["Hide before date", "date", "2020-05-23"],
-        highTime: ["Highlight after time", "time", "18:00", "20:30"],
-        replaceInfo: ["Info replacement message", "textarea",, "Lorem ipsum...", 5]
+        other: ["Other", "section", {
+            hideDate: ["Hide before date", "date", "2020-05-23"],
+            highTime: ["Highlight after time", "time", "18:00", "20:30"],
+            invertDate: ["Invert date strings", "checkbox", false],
+            replaceInfo: ["Info replacement message", "textarea",, "Lorem ipsum...", 5]
+        }, [{ path:["/", "myUserscript", "mode"], value:"Auto", action:"disable" }]] // Disable section if Mode is Auto
     }]
 }, { myUserscript:oldSettings }); // (it doesn't matter if oldSettings is null)
 
