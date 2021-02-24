@@ -18,6 +18,7 @@ A bitter attempt at making the YouTube experience better. This script adds a few
 | History | Remember all watched videos and print how many times current video has been watched. | | no |
 | Media Session | Fix media keys integration. | | no |
 | Metadata | Save video metadata: title, uploader, etc. | | no |
+| Stopwatch | Measure time between two points in a video | u | no |
 
 ## Installation
 

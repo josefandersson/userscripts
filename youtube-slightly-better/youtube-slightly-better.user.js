@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.59
+// @version      1.60
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
 // @icon         https://youtube.com/favicon.ico
-// @require      https://raw.githubusercontent.com/josefandersson/userscripts/master/userscript-settings/userscript-settings.js##############
+// @require      https://raw.githubusercontent.com/josefandersson/userscripts/master/userscript-settings/userscript-settings.js#2.7
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
@@ -23,7 +23,7 @@
 //        - Rewrite history module, if video is replayed without reloaded add extra plays to history,
 //          use video progression every second to check playtime instead of real life time since the video can be speed up/down
 //        - Remake init and module system somewhat, so that it inits on any page, not just when video is detected, also add onEnable/onDisable for toggling modules
-//        - Add modules: quick-replay (mark a start and stop to replay, one more click clears), currentTime (but a barItem for current time outside of the video overlay)
+//        - Add modules: quick-replay (mark a start and stop to replay, one more click clears)
 
 
 // =============
@@ -219,7 +219,8 @@ const settingsDescriptor = {
     };
 
     class BarItem {
-        constructor({ color='red', doubleClicks=false, group=0, height=9, onClick=null, start, stop=null, text=null }={}) {
+        constructor({ above=false, color='red', doubleClicks=false, group=0, height=9, onClick=null, start, stop=null, text=null }={}) {
+            this.above = above;
             this.doubleClicks = doubleClicks;
             this.group = group;
             this.onClick = onClick;
@@ -256,7 +257,7 @@ const settingsDescriptor = {
                 if (this.text)
                     Popup.create({ target:this.el, text:this.text });
             }
-            this.el.style.zIndex = 1000 + this.group;
+            this.el.style.zIndex = (this.above ? 100 : 1000) + this.group;
         }
         remove() {
             Bar.removeItem(this);
@@ -266,7 +267,8 @@ const settingsDescriptor = {
         }
         setHeight(height) {
             this.el.style.height = `${this.height = height}px`;
-            Bar.calculateDimensions();
+            if (!this.above)
+                Bar.calculateDimensions();
         }
         // start and stop in 0.0-1.0
         setStartStop(start, stop=null) {
@@ -280,7 +282,8 @@ const settingsDescriptor = {
                 this.width = (stop - start);
             }
             Object.assign(this.el.style, { left:`calc(${start*100}% + ${this.offset}px)`, width:`${this.width*100}%` });
-            Bar.calculateDimensions();
+            if (!this.above)
+                Bar.calculateDimensions();
         }
     }
 
@@ -379,7 +382,6 @@ const settingsDescriptor = {
             if (moduleKeys)
                 Object.assign(settingsDescriptor.ytsb[2].keybinds[2], moduleKeys);
             if (moduleSettings) {
-                console.log(this.rName, moduleSettings[3])
                 if (moduleSettings[3] === true)
                     moduleSettings[3] = [{ path:['/', 'ytsb', 'enabledModules'], eval:v=>v.indexOf(this.rName)===-1, action:'disable' }]
                 settingsDescriptor.ytsb[2].modules[2][this.name] = moduleSettings;
@@ -1342,6 +1344,77 @@ const settingsDescriptor = {
     };
     mModule.mTimeMarker.rName = 'Time Marker';
     mModule.mTimeMarker.rDesc = 'Add a moving current time marker to the bar.';
+
+
+
+    // ==================
+    // Stopwatch Module
+    // ==================
+    //
+    // - Measure time between two points in a video
+    //
+    mModule.mStopwatch = class mStopwatch extends mModule {
+        constructor() {
+            super();
+            this.stopwatch = this.addItem(new mItemBtn(this, 'W', 'Stopwatch'));
+            this.stopwatch.addOnClick(() => this.onKey());
+            this.onChangeId = Page.addCallback('video', () => this.reset());
+            this.registerKeys([settings.keybinds.stopwatch]);
+            this.start = null;
+            this.stop = null;
+        }
+        reset() {
+            if (this.start)
+                this.barItem.remove();
+            this.start = null;
+            this.stop = null;
+            this.stopwatch.element.innerText = 'W';
+            this.stopwatch.element.style.color = '';
+            clearInterval(this.iid);
+        }
+        onKey() {
+            if (this.start == null) {
+                this.start = Page.v.currentTime;
+                if (!this.barItem)
+                    this.barItem = new BarItem({ above:true, group:3, height:4, start:this.start/Page.v.duration });
+                Bar.addItem(this.barItem);
+                this.barItem.setColor(settings.modules.mStopwatch.colorBarStarted);
+                this.stopwatch.element.style.color = settings.modules.mStopwatch.colorText;
+                this.iid = setInterval(() => this.update(), 200);
+            } else if (this.stop == null) {
+                this.stop = Page.v.currentTime;
+                clearInterval(this.iid);
+                this.barItem.setColor(settings.modules.mStopwatch.colorBarStopped);
+            } else {
+                this.reset();
+            }
+            this.update();
+        }
+        update() {
+            if (this.start == null) return;
+            let start, stop = this.stop || Page.v.currentTime;
+            if (this.start < stop)
+                start = this.start;
+            else {
+                start = stop;
+                stop = this.start;
+            }
+            let time = stop - start;
+            this.barItem.text = this.stopwatch.element.innerText = timeToHHMMSSmss(time);
+            this.barItem.setStartStop(start/Page.v.duration, stop/Page.v.duration);
+        }
+        static registerSettings() {
+            super.registerSettings(true, {
+                stopwatch: ['Stopwatch start/stop', 'text', 'u']
+            }, ['Stopwatch', 'section', {
+                colorText: ['Text color', 'text', '#2e569c'],
+                colorBarStarted: ['Bar color (started)', 'text', '#2e569c'],
+                colorBarStopped: ['Bar color (stopped)', 'text', '#0e2246'],
+            }, true]);
+        }
+    };
+    mModule.mStopwatch.rName = 'Stopwatch';
+    mModule.mStopwatch.rDesc = 'Measure time between two points in a video.';
 
 
 
