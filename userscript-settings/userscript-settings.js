@@ -1,7 +1,7 @@
 // ==UserLibrary==
 // @name          Userscript Settings
 // @namespace     https://github.com/josefandersson/userscripts/tree/master/userscript-settings
-// @version       2.7
+// @version       2.7b
 // @description   Library for adding a settings popup to userscripts.
 // @author        Josef Andersson
 // ==/UserLibrary==
@@ -151,6 +151,8 @@ if (typeof window.UserscriptSettings === 'undefined') {
         this.setDisabled = disabled => {
             if (this.type === 'section')
                 this.forEachChild(c => c.setDisabled(disabled), false);
+            else if (this.type === 'list')
+                this.select.setDisabled(disabled);
             else
                 this.element.children[1].children[0].disabled = disabled;
             this.element.classList[disabled ? 'add' : 'remove']('usstngs-disabled');
@@ -186,10 +188,10 @@ if (typeof window.UserscriptSettings === 'undefined') {
                         input.classList[this.setUnsavedValue(opts.filter(o =>
                             o.selected).map(o => o.value)) ? 'add' : 'remove']('usstngs-unsaved'));
                 } else if (this.type === 'list') {
-                    const select = new SettingList(Object.assign({ options:this.options, value:this.currentValue, defaultValue:this.defaultValue }, this.settings || {}));
-                    select.onchange = value =>
+                    this.select = new SettingList(Object.assign({ options:this.options, value:this.currentValue, defaultValue:this.defaultValue }, this.settings || {}));
+                    this.select.onchange = value =>
                         input.classList[this.setUnsavedValue(value) ? 'add' : 'remove']('usstngs-unsaved');
-                    input = select.createElement();
+                    input = this.select.createElement();
                 } else {
                     switch (this.type) {
                         case "checkbox":
@@ -546,16 +548,19 @@ if (typeof window.UserscriptSettings === 'undefined') {
 .usstngs .usstngs-hidden{display:none;}
 .usstngs .usstngs-disabled label{color:#505050;}
 .usstngs-disabled label{cursor:initial !important;}
-.usstngs-disabled input,.usstngs-disabled textarea,.usstngs-disabled button,.usstngs-disabled select{cursor:initial !important;background-color:#232323;border-color:#2d2d2d;color:#505050;}
-table.usstngs-list-setting {counter-reset:row;color:#d0d0d0 !important;font-size:.9em;background-color:#292929;border:1px solid #585858;}
-table.usstngs-list-setting tr:not(.unchecked) { counter-increment:row; }
-table.usstngs-list-setting tr:not(.unchecked) td.usstngs-index::before { content:counter(row); font-size:12px; text-align:center; display:block; font-family:monospace; color:#888; }
-table.usstngs-list-setting td.usstngs-move { display:inline-block; height:1em; }
-table.usstngs-list-setting td.usstngs-move span { color:#888; cursor:pointer; font-size:.7em; height:50%; display:block; overflow:hidden; padding:0 5px; margin:0 -5px; }
-table.usstngs-list-setting td.usstngs-move span:hover { color:#ccc;border-color:brown; }
-table.usstngs-list-setting td.usstngs-move span:first-child::after { content:'▵'; position:relative; bottom:.4em; pointer-events:none; }
-table.usstngs-list-setting td.usstngs-move span:last-child::after { content:'▿'; position:relative; bottom:.4em; }
-table.usstngs-list-setting button.usstngs-add-row { width:100%; }` }));
+.usstngs-disabled input,.usstngs-disabled textarea,.usstngs-disabled button,.usstngs-disabled select,.usstngs-disabled .usstngs-list-setting
+    {cursor:initial !important;background-color:#232323;border-color:#2d2d2d;color:#505050;}
+.usstngs-disabled .usstngs-move{cursor:initial !important;}
+.usstngs-list-setting {counter-reset:row;color:#d0d0d0;font-size:.9em;background-color:#292929;border:1px solid #585858;}
+.usstngs-list-setting tr:not(.unchecked){counter-increment:row;}
+.usstngs-list-setting tr:not(.unchecked) td.usstngs-index::before{content:counter(row);font-size:12px;text-align:center;display:block;font-family:monospace; color:#888; }
+.usstngs-list-setting td.usstngs-move{display:inline-block;height:1em;}
+.usstngs-list-setting td.usstngs-move span {color:#888;cursor:pointer;font-size:.7em;height:50%;display:block;overflow:hidden;padding:0 5px;margin:0 -5px;}
+.usstngs-list-setting td.usstngs-move span:hover {color:#ccc;}
+.usstngs-list-setting td.usstngs-move span:first-child::after { content:'▵'; position:relative; bottom:.4em; pointer-events:none; }
+.usstngs-list-setting td.usstngs-move span:last-child::after { content:'▿'; position:relative; bottom:.4em; }
+.usstngs-list-setting button.usstngs-add-row { width:100%; }
+.ustable.usstngs-list-setting` }));
     };
 
     /**
@@ -595,15 +600,27 @@ table.usstngs-list-setting button.usstngs-add-row { width:100%; }` }));
 
         this.onchange = null;
         this.items = [];
+        this.disabled = false;
     };
 
     /**
      * Set the value for this setting.
-     * @param {Array} value New value
+     * @param {Array} value
      */
     SettingList.prototype.setValue = function(value) {
         // TODO: Ability to set this setting's value from the outside
     };
+
+    /**
+     * Enable and disable this option.
+     * @param {Boolean} disabled
+     * */
+    SettingList.prototype.setDisabled = function(disabled) {
+        if (disabled !== this.disabled) {
+            this.disabled = disabled;
+            this.element.querySelectorAll('input').forEach(el => el.disabled = disabled);
+        }
+    }
 
     /**
      * For private use
@@ -613,6 +630,8 @@ table.usstngs-list-setting button.usstngs-add-row { width:100%; }` }));
      */
     SettingList.prototype.beginMoving = function(tr, ev) {
         ev.preventDefault();
+        if (this.disabled) return;
+
         const btn = ev.target;
         let rect = tr.getBoundingClientRect();
 
@@ -648,7 +667,7 @@ table.usstngs-list-setting button.usstngs-add-row { width:100%; }` }));
                 }
             }
         };
-        btn.onmouseleave = () => { console.log(1);beginMoving()};
+        btn.onmouseleave = () => beginMoving();
         btn.onmouseup = () => end();
         this.element.onmouseleave = () => end();
         this.element.onmouseup = () => {
@@ -700,13 +719,13 @@ table.usstngs-list-setting button.usstngs-add-row { width:100%; }` }));
                 const up = cr('span', { className:'usstngs-move' });
                 const down = cr('span', { className:'usstngs-move' });
                 up.onclick = () => {
-                    if (el.previousElementSibling) {
+                    if (!this.disabled && el.previousElementSibling) {
                         el.parentElement.insertBefore(el, el.previousElementSibling);
                         this.adoptValueFromElements();
                     }
                 };
                 down.onclick = () => {
-                    if (el.nextElementSibling) {
+                    if (!this.disabled && el.nextElementSibling) {
                         el.parentElement.insertBefore(el.nextElementSibling, el);
                         this.adoptValueFromElements();
                     }
