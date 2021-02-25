@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.60
+// @version      1.61
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -465,8 +465,7 @@ const settingsDescriptor = {
             }
         }
         getThumbnailUrl() {
-            if (Page.vid) return `https://img.youtube.com/vi/${Page.vid}/maxresdefault.jpg`;
-            else         return null;
+            return Page.vid ? `https://img.youtube.com/vi/${Page.vid}/maxresdefault.jpg` : null;
         }
         onKey(ev) {
             super.onKey(ev);
@@ -745,7 +744,7 @@ const settingsDescriptor = {
     mModule.mProgress = class mProgress extends mModule {
         constructor() {
             super();
-            this.progress = this.addItem(new mItemBtn(this, '0%', 'Video progression\nLeft-click: Cycle mode'));
+            this.progress = this.addItem(new mItemBtn(this, '0%', `Video progression\nLeft-click: Cycle mode\nKeybinding: ${settings.keybinds.progressFormat}`));
             this.progress.addOnClick(() => this.handleOnClick());
             this.mode = 'percentage';
             this.registerKeys([settings.keybinds.progressFormat]);
@@ -778,14 +777,15 @@ const settingsDescriptor = {
                     newValue = `${Math.round(Page.v.currentTime / Page.v.duration * 100)}%`;
                     break;
                 case 'time':
-                    newValue = timeToHHMMSSmss(Math.round(Page.v.currentTime), true);
+                    newValue = timeToHHMMSSmss(Math.round(settings.modules.mProgress.respectSpeed ? Page.v.currentTime / Page.v.playbackRate : Page.v.currentTime), true);
                     break;
                 case 'timeleft':
-                    newValue = timeToHHMMSSmss(Math.round(Page.v.duration - Page.v.currentTime), true);
+                    newValue = timeToHHMMSSmss(Math.round(settings.modules.mProgress.respectSpeed ? (Page.v.duration - Page.v.currentTime) / Page.v.playbackRate : Page.v.duration - Page.v.currentTime), true);
                     break;
                 case 'minimum':
                 case 'minimumleft':
-                    const t = this.mode === 'minimum' ? Page.v.currentTime : Page.v.duration - Page.v.currentTime;
+                    let t = this.mode === 'minimum' ? Page.v.currentTime : Page.v.duration - Page.v.currentTime;
+                    if (settings.modules.mProgress.respectSpeed) t /= Page.v.playbackRate;
                     newValue = t < 60 ? `${Math.round(t)}s` : t < 3600 ? `${Math.round(t / 60)}m` : `${Math.round(t / 3600)}h`;
                     break;
                 default:
@@ -798,7 +798,9 @@ const settingsDescriptor = {
         static registerSettings() {
             super.registerSettings(true, {
                 progressFormat: ['Change progress format', 'text', 'p']
-            });
+            }, ['Progress', 'section', {
+                respectSpeed: ['Respect video speed', 'checkbox', true]
+            }, true]);
         }
     };
     mModule.mProgress.rName = 'Progress';
@@ -828,7 +830,7 @@ const settingsDescriptor = {
     mModule.mTrim = class mTrim extends mModule {
         constructor() {
             super();
-            this.trim = this.addItem(new mItemBtn(this, 'T', 'Trim'));
+            this.trim = this.addItem(new mItemBtn(this, 'T', `Trim\nKeybinding: ${settings.keybinds.trim}`));
             this.trim.addOnClick(() => this.handleOnClick());
             this.registerKeys([settings.keybinds.trim]);
             this.onChangeId = Page.addCallback('video', () => this.onChange());
@@ -1132,7 +1134,7 @@ const settingsDescriptor = {
     mModule.mNotes = class mNotes extends mModule {
         constructor() {
             super();
-            this.note = this.addItem(new mItemBtn(this, 'N', 'Note'));
+            this.note = this.addItem(new mItemBtn(this, 'N', `Note\nKeybinding: ${settings.keybinds.note}`));
             this.note.addOnClick(() => this.handleOnClick());
             this.registerKeys([settings.keybinds.note]);
             Page.addCallback('video', () => this.onChange());
@@ -1356,7 +1358,7 @@ const settingsDescriptor = {
     mModule.mStopwatch = class mStopwatch extends mModule {
         constructor() {
             super();
-            this.stopwatch = this.addItem(new mItemBtn(this, 'W', 'Stopwatch'));
+            this.stopwatch = this.addItem(new mItemBtn(this, 'W', `Stopwatch\nKeybinding: ${settings.keybinds.stopwatch}`));
             this.stopwatch.addOnClick(() => this.onKey());
             this.onChangeId = Page.addCallback('video', () => this.reset());
             this.registerKeys([settings.keybinds.stopwatch]);
@@ -1405,7 +1407,7 @@ const settingsDescriptor = {
         }
         static registerSettings() {
             super.registerSettings(true, {
-                stopwatch: ['Stopwatch start/stop', 'text', 'u']
+                stopwatch: ['Stopwatch start/stop', 'text', 'w']
             }, ['Stopwatch', 'section', {
                 colorText: ['Text color', 'text', '#2e569c'],
                 colorBarStarted: ['Bar color (started)', 'text', '#2e569c'],
