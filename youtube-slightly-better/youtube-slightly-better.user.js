@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.63
+// @version      1.64
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -1431,10 +1431,11 @@ const settingsDescriptor = {
             super();
             window.addEventListener('scroll', () => this.onScroll());
             this.isMini = false;
+            this.onPageId = Page.addCallback('url', () => this.onScroll(false));
             this.onChangeId = Page.addCallback('video', () => this.onScroll());
         }
-        onScroll() {
-            const shouldMini = innerHeight * settings.modules.mMiniPlayer.scrollTrigger < scrollY;
+        onScroll(forceState=null) {
+            const shouldMini = forceState ?? innerHeight * settings.modules.mMiniPlayer.scrollTrigger < scrollY;
             if (shouldMini !== this.isMini) {
                 if (shouldMini && Page.v.paused) return;
                 const player = document.querySelector('.html5-video-player');
