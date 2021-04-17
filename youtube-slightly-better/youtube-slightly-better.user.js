@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.62
+// @version      1.63
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -16,8 +16,6 @@
 // @run-at       document-start
 // ==/UserScript==
 
-// FIXME: - Opening video in new tab will not autoplay the video, but it will
-//          still add the video to history if tab is opened for more than 10 seconds
 // TODO:  - Playlists: reverse, shuffle
 //        - Smart speed module that analyzes the sound to vastly speed up the clip when no one is talking/no sound
 //        - Disable autoplaying 'channel trailer' video on channel page
@@ -348,7 +346,7 @@ const settingsDescriptor = {
     class mModule {
         constructor() {
             this.element = cr('div');
-            container.appendChild(this.element);
+            btnsContainer.appendChild(this.element);
             this.element.style.display = 'none';
             this.items = [];
             this.constructor.i = this;
@@ -1421,6 +1419,49 @@ const settingsDescriptor = {
 
 
 
+    // =================
+    // Mini Player Module
+    // =================
+    //
+    // - Move video into a small floating window when scrolling down
+    // TODO: Show/create progress bar, the default one is hidden right now because it's too big
+    //
+    mModule.mMiniPlayer = class mMiniPlayer extends mModule {
+        constructor() {
+            super();
+            window.addEventListener('scroll', () => this.onScroll());
+            this.isMini = false;
+            this.onChangeId = Page.addCallback('video', () => this.onScroll());
+        }
+        onScroll() {
+            const shouldMini = innerHeight * settings.modules.mMiniPlayer.scrollTrigger < scrollY;
+            if (shouldMini !== this.isMini) {
+                if (shouldMini && Page.v.paused) return;
+                const player = document.querySelector('.html5-video-player');
+                if (player) {
+                    player.classList[shouldMini ? 'add' : 'remove']('ytsb-miniplayer');
+                    Object.assign(player.style, shouldMini
+                        ? {
+                            width: settings.modules.mMiniPlayer.width + 'px',
+                            height: settings.modules.mMiniPlayer.height + 'px'}
+                        : { width:'', height:'' });
+                    this.isMini = shouldMini;
+                } else this.isMini = false;
+            }
+        }
+        static registerSettings() {
+            super.registerSettings(true, null, ['Mini player', 'section', {
+                scrollTrigger: ['Scroll distance trigger (decimal)', 'number', 0.7, null, 0, null, 0.05],
+                width: ['Player width (px)', 'number', 300, null, 10],
+                height: ['Player height (px)', 'number', 200, null, 10],
+            }, true]);
+        }
+    };
+    mModule.mMiniPlayer.rName = 'Mini Player';
+    mModule.mMiniPlayer.rDesc = 'Move video into a small floating window when scrolling down.';
+
+
+
     // ==========
     // Menu Items
     // ==========
@@ -1502,23 +1543,23 @@ const settingsDescriptor = {
 
     // ==================
     // Inject CSS styling
-    // ==================
+    // ==================width:300px !important; height:200px !important;
     GM_addStyle(GM_getResourceText('style.css'));
 
 
     // ====
     // Init
     // ====
-    let title, container;
+    let title, btnsContainer;
 
     function init() {
-        container = cr('div', { className:'ytbc' });
+        btnsContainer = cr('div', { className:'ytbc' });
 
         // Initialize modules
         const REF = {}; Object.keys(mModule).forEach(k => REF[mModule[k].rName] = k);
         settings?.enabledModules.map(name => new mModule[REF[name]]());
 
-        title.parentElement.insertBefore(container, title);
+        title.parentElement.insertBefore(btnsContainer, title);
     }
 
     // Wait for video to exist before initializing modules
@@ -1526,7 +1567,7 @@ const settingsDescriptor = {
     let id = setInterval(() => {
         if (!title) title = document.querySelector('#container>.title');
         if (!Page.v) Page.v = document.querySelector('video');
-        if (title && Page.v) {
+        if (title && Page.v && isFinite(Page.v.duration)) {
             Page.setVideo(Page.v);
             clearInterval(id);
             setTimeout(init, 20);

@@ -66,3 +66,36 @@
   padding: 0 2px 2px 0;
   margin: -1px 0 0 -1px;
 }
+
+.ytsb-miniplayer {
+  position: fixed !important;
+  right: 20px;
+  bottom: 20px;
+  z-index: 1000 !important;
+}
+.ytsb-miniplayer .html5-video-container {
+  height: 100% !important;
+}
+.ytsb-miniplayer .ytp-chrome-bottom {
+  width: 100% !important;
+}
+.ytsb-miniplayer video {
+  width: 100% !important;
+  height: 100% !important;
+  top: 0 !important;
+  left: 0 !important;
+}
+.ytsb-miniplayer .ytp-chrome-controls {
+  width: 100%;
+  margin-left: -12px;
+}
+.ytsb-miniplayer .ytp-progress-bar,
+.ytsb-miniplayer .ytp-player-content,
+.ytsb-miniplayer .ytp-chapter-container,
+.ytsb-miniplayer .ytp-popup,
+.ytsb-miniplayer .ytp-subtitles-button,
+.ytsb-miniplayer .ytp-settings-button,
+.ytsb-miniplayer .ytp-miniplayer-button,
+.ytsb-miniplayer .ytp-size-button {
+  display: none !important;
+}
