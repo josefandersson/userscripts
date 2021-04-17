@@ -1,16 +1,18 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.61
+// @version      1.62
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
 // @icon         https://youtube.com/favicon.ico
-// @require      https://raw.githubusercontent.com/josefandersson/userscripts/master/userscript-settings/userscript-settings.js#2.7
+// @require      https://raw.githubusercontent.com/josefandersson/userscripts/master/userscript-settings/userscript-settings.js#2.7b
+// @resource     style.css https://raw.githubusercontent.com/josefandersson/userscripts/master/youtube-slightly-better/style.css
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @grant        GM_registerMenuCommand
+// @grant        GM_getResourceText
 // @run-at       document-start
 // ==/UserScript==
 
@@ -63,9 +65,8 @@ const settingsDescriptor = {
     // ======================
     // Handle key events/cmds
     // ======================
-    let keyListeners = {};
-
-    function keyEvent(ev, event) {
+    const keyListeners = {};
+    const keyEvent = (ev, event) => {
         if (keyListeners[ev.key] && keyListeners[ev.key][event])
             if (ev.key === 'Escape' || (ev.target.getAttribute('contenteditable') != 'true' && ['INPUT', 'SELECT', 'TEXTAREA'].indexOf(ev.target.tagName) === -1))
                 keyListeners[ev.key][event].forEach(cb => cb(ev, event));
@@ -1502,29 +1503,13 @@ const settingsDescriptor = {
     // ==================
     // Inject CSS styling
     // ==================
-    GM_addStyle(
-`.ytbc{float:right;color:white;}
-.ytbc>div{display:inline-block;margin:0 4px;}
-.ytbc>div>span{margin:0 2px;}.ytbc .btn{cursor:pointer;}
-.ytbc-p{z-index:1000;position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;background-color:#2237;}
-.ytbc-p>input{
-    pointer-events:auto;position:fixed;top:50vh;left:50vw;transform:translate(-50%,-50%);
-    color:#350505;background-color:#d019108c;font-size:20px;padding:10px;border:none;text-align:center;}
-.ytbc-p>input:focus{outline:none;}
-.ytsb-popup{position:absolute;color:#cecece;background-color:#101010;border:1px solid #2b2b2b;border-radius:4px;
-    display:none;font-size:12px;padding:8px;text-align:center;z-index:1000;}
-.ytsb-bar{margin-left:11px;margin-right:11px;}
-.ytsb-bar{position:relative;}
-.ytsb-bar>div>div{position:absolute;min-width:6px;cursor:pointer;}
-.ytsb-bar>div>div:not(.ytsb-popup):hover{padding:0 2px 2px 0;margin:-1px 0 0 -1px;}`);
+    GM_addStyle(GM_getResourceText('style.css'));
 
 
     // ====
     // Init
     // ====
     let title, container;
-
-    // Page.start();
 
     function init() {
         container = cr('div', { className:'ytbc' });
