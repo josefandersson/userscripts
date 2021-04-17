@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Slightly Better
 // @namespace    https://github.com/josefandersson/userscripts/tree/master/youtube-slightly-better
-// @version      1.64
+// @version      1.65
 // @description  Adds some extra features to YouTube
 // @author       Josef Andersson
 // @match        https://www.youtube.com/*
@@ -81,11 +81,12 @@ const settingsDescriptor = {
     // =============
     // TODO: When changing to some pages without a video player (settings? user profile?) we need to re-detect it when we are back to a video page
     const Page = {
-        v: null,           // Video DOM element
-        vid: null,         // Video id (v=xxxxxxxx in URL)
-        prevVid: null,     // Previous video id
-        prevUrl: null,     // Previous url
-        isTheater: false,  // Player is in theater mode
+        v: null,             // Video DOM element
+        vid: null,           // Video id (v=xxxxxxxx in URL)
+        prevVid: null,       // Previous video id
+        prevUrl: null,       // Previous url
+        isTheater: false,    // Player is in theater mode
+        isLivestream: false, // Video is live (Inaccurate duration/currentTime)
         time: null,
 
         callbacks: {
@@ -96,7 +97,7 @@ const settingsDescriptor = {
 
         loopUrl: function() {
             if (location.href !== this.prevUrl) {
-                this.onChange();
+                this.call('url');
                 this.prevUrl = location.href;
             }
             this.tidUrl = this.callbacks.url.length ? setTimeout(() => this.loopUrl, 500) : null;
@@ -151,6 +152,7 @@ const settingsDescriptor = {
                 const param = new URLSearchParams(location.search);
                 this.vid = param.get('v');
                 this.time = param.get('t');
+                this.isLivestream = !!document.querySelector('.ytp-live');
                 this.call('video');
             }
             this.v.addEventListener('loadeddata', cb);
@@ -172,6 +174,7 @@ const settingsDescriptor = {
         lowestGroup: 0,
         addItem: function(item) {
             this.items.push(item);
+            item.isInBar = true;
             this.calculateDimensions();
             this.el.appendChild(item.el);
         },
@@ -208,6 +211,7 @@ const settingsDescriptor = {
         },
         removeItem: function(item) {
             item.el.remove();
+            item.isInBar = false;
             this.items.splice(this.items.indexOf(item), 1);
             this.calculateDimensions();
         },
@@ -224,11 +228,16 @@ const settingsDescriptor = {
             this.group = group;
             this.onClick = onClick;
             this.text = text;
+            this.isInBar = false;
 
             this.createElement();
             this.setColor(color);
             this.setHeight(height);
             this.setStartStop(start, stop);
+        }
+        add() {
+            Bar.addItem(this);
+            return this;
         }
         createElement() {
             this.el = cr('div');
@@ -260,6 +269,7 @@ const settingsDescriptor = {
         }
         remove() {
             Bar.removeItem(this);
+            return this;
         }
         setColor(color) {
             this.el.style.backgroundColor = this.color = color;
@@ -283,6 +293,10 @@ const settingsDescriptor = {
             Object.assign(this.el.style, { left:`calc(${start*100}% + ${this.offset}px)`, width:`${this.width*100}%` });
             if (!this.above)
                 Bar.calculateDimensions();
+        }
+        setRawStart(start) {
+            this.start = start;
+            this.el.style.left = `calc(${start*100}% + ${this.offset}px)`;
         }
     }
 
@@ -1329,12 +1343,23 @@ const settingsDescriptor = {
         constructor() {
             super();
             this.barItem = new BarItem({ color:settings.modules.mTimeMarker.color, group:5, height:settings.modules.mTimeMarker.height, start:0 });
-            Bar.addItem(this.barItem);
-            Page.v.addEventListener('timeupdate', () => this.onTimeUpdate());
+            Page.addCallback('video', () => this.onChange());
+            this.onChange();
         }
-        onTimeUpdate() {
-            this.barItem.setStartStop(Page.v.currentTime / Page.v.duration);
-            // TODO: Don't use onTimeUpdate, but do requestAnimationFrame, and move position of item directly (not using setStartStop) when change is great enough to look different to not update dom unneccesarily
+        onChange() {
+            if (Page.isLivestream) {
+                if (this.barItem.isInBar)
+                    this.barItem.remove();
+            } else if (!this.barItem.isInBar) {
+                this.barItem.add();
+                this.barItem.setStartStop(Page.v.currentTime / Page.v.duration);
+                this.updateLoop();
+            }
+        }
+        updateLoop() {
+            if (Page.isLivestream) return;
+            this.barItem.setRawStart(Page.v.currentTime / Page.v.duration);
+            requestAnimationFrame(() => this.updateLoop());
         }
         static registerSettings() {
             super.registerSettings(true, null, ['Time marker', 'section', {
