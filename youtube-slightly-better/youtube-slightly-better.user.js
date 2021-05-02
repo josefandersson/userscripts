@@ -1478,8 +1478,8 @@ const settingsDescriptor = {
         static registerSettings() {
             super.registerSettings(true, null, ['Mini player', 'section', {
                 scrollTrigger: ['Scroll distance trigger (decimal)', 'number', 0.7, null, 0, null, 0.05],
-                width: ['Player width (px)', 'number', 300, null, 10],
-                height: ['Player height (px)', 'number', 200, null, 10],
+                width: ['Player width (px)', 'number', 400, null, 10],
+                height: ['Player height (px)', 'number', 225, null, 10],
             }, true]);
         }
     };
