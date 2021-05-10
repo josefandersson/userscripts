@@ -35,8 +35,13 @@ document.body.appendChild(crc('div', 0,
 ));
 
 
-
-// Create element and style it
+/**
+ * Create element and style it
+ * @param {String} tag Element tag name
+ * @param {Object} obj Object to assign to element
+ * @param {Object} style Object to assign to element's style
+ * @returns {HTMLElement} Created element
+ */
 const crs = (tag, obj, style) => {
     const el = cr(tag, obj);
     Object.assign(el.style, style || {});
