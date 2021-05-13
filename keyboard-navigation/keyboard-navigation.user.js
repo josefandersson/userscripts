@@ -24,6 +24,8 @@ Navigation mode
 
 */
 
+const MIN_TIME_BETWEEN_SCROLL = 100;
+
 /**
  * Create element and style it
  * @param {String} tag Element tag name
@@ -59,7 +61,7 @@ const createHint = (text, x, y) => {
  * Calculated a list of links in the viewport and their adjusted center positions
  * @returns {Object[]} Array of elements with positions
  */
-var getInViewport = () => {
+const getInViewport = () => {
 	const minY = scrollY;
 	const minX = scrollX;
 	const maxY = minY + innerHeight;
@@ -89,6 +91,29 @@ var getInViewport = () => {
 	}).filter(x => x);
 };
 
+const updateHintsInViewport = () => {
+	const inView = getInViewport();
+	inView.forEach(({ x, y, el }) => {
+		if (hints[el]) {
+			Object.assign(hints[el].hint.style, { left:`${screenX + x}px`, top:`${screenY + y}px` });
+		} else {
+			const id = getNextFreeId();
+			hints[el] = { id, hint:createHint(id, x, y) };
+			usedIds.push(id);
+		}
+	});
+};
+
+const getNextFreeId = () => {
+	// TODO: Generate IDs in a sequenze of most to least easy to press
+	let i = 1;
+	for (; usedIds.indexOf(i) > -1; i++);
+	return i;
+};
+
+const hints = {};
+const usedIds = [];
+
 const inject = () => {
 	let id = 1;
 	const ids = {};
@@ -98,3 +123,22 @@ const inject = () => {
 		id++;
 	});
 };
+
+
+let lastScroll, nextScrollTid
+addEventListener('wheel', () => {
+	const now = Date.now();
+	const delta = now - lastScroll;
+	if (nextScrollTid)
+		return;
+	else if (delta < MIN_TIME_BETWEEN_SCROLL)
+		nextScrollTid = setTimeout(() => {
+			nextScrollTid = null;
+			lastScroll = now;
+			updateHintsInViewport();
+		}, MIN_TIME_BETWEEN_SCROLL - delta);
+	else {
+		lastScroll = now;
+		updateHintsInViewport();
+	}
+});
