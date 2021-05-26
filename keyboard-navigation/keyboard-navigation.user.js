@@ -24,7 +24,7 @@ Navigation mode
 
 */
 
-const MIN_TIME_BETWEEN_SCROLL = 100;
+const MIN_TIME_BETWEEN_UPDATES = 100;
 
 /**
  * Create element and style it
@@ -125,20 +125,23 @@ const inject = () => {
 };
 
 
+// Handle scrolling
 let lastScroll, nextScrollTid
 addEventListener('wheel', () => {
 	const now = Date.now();
 	const delta = now - lastScroll;
 	if (nextScrollTid)
 		return;
-	else if (delta < MIN_TIME_BETWEEN_SCROLL)
+	else if (delta < MIN_TIME_BETWEEN_UPDATES)
 		nextScrollTid = setTimeout(() => {
 			nextScrollTid = null;
 			lastScroll = now;
 			updateHintsInViewport();
-		}, MIN_TIME_BETWEEN_SCROLL - delta);
+		}, MIN_TIME_BETWEEN_UPDATES - delta);
 	else {
 		lastScroll = now;
 		updateHintsInViewport();
 	}
 });
+
+// TODO: Handle viewport change (ie links appearing/disappearing in the vp)
