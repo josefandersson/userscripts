@@ -19,7 +19,7 @@ This repo is a collection of public userscripts created by me. Check out the REA
 
 ## Userscripts in _other_ repos
 
-- [__KissMAL__](https://github.com/josefandersson/KissMAL) - Adds links on myanimelist for streaming/reading animes/mangas on kissanime/kissmanga.
+- ~~[__KissMAL__](https://github.com/josefandersson/KissMAL) - Adds links on myanimelist for streaming/reading animes/mangas on kissanime/kissmanga.~~ ___outdated___
 
 ## Installation
 
