@@ -184,7 +184,6 @@ const CLICK_RATE = 100;
         onwheel: ev => {
             if (ev.ctrlKey) {
                 ev.preventDefault();
-                console.log
                 Zooming.zoomImageTowards(1-ev.deltaY/500, ev.clientX, ev.clientY);
             }
         },
