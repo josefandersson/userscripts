@@ -231,11 +231,9 @@ const CLICK_RATE = 100;
                 ox = rx;
                 oy = ry;
             } else {
-                if (rx < 1/3) ox = 0;
-                else if (2/3 < rx) ox = 1;
+                if (2/3 < rx) ox = 1;
                 else ox = .5;
-                if (ry < 1/3) oy = 0;
-                else if (2/3 < ry) oy = 1;
+                if (2/3 < ry) oy = 1;
                 else oy = .5;
             }
             ox *= diffW;
