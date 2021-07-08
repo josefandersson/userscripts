@@ -30,8 +30,6 @@ const CLICK_RATE = 100;
 (function() {
     'use strict';
 
-    // TODO: Check if page really is an image page
-
     // ================
     // HELPER FUNCTIONS
     // ================
@@ -57,6 +55,7 @@ const CLICK_RATE = 100;
     image.src = oldImage.src;
 
     let rotation = 0;
+
 
 
     // =======
@@ -293,6 +292,5 @@ const CLICK_RATE = 100;
         ['Numpad1',      0, 0, Binds.doRotateLeft],
         ['KeyR',         0, 0, Binds.doRotateRight],
         ['Numpad2',      0, 0, Binds.doRotateRight],
-        // TODO: Add keysbindings for zooming in and out and paning with arrows?
     ];
 })();
