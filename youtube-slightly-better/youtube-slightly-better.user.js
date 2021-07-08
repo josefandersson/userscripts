@@ -105,7 +105,7 @@ const settingsDescriptor = {
 
         addCallback: function(ev, cb) {
             const cbs = this.callbacks[ev];
-            if (!cbs) throw 'unknown event: ' + ev;
+            if (!cbs) throw new Error('unknown event: ' + ev);
             let i = 0;
             while (cbs[i] != null) i++;
             cbs[i] = cb;
@@ -136,12 +136,12 @@ const settingsDescriptor = {
         },
         call: function(ev) {
             const cbs = this.callbacks[ev];
-            if (!cbs) throw 'unknown event: ' + ev;
+            if (!cbs) throw new Error('unknown event: ' + ev);
             cbs.filter(cb => cb != null).forEach(cb => cb());
         },
         removeCallback: function(ev, i) {
             const cbs = this.callbacks[ev];
-            if (!cbs) throw 'unknown event: ' + ev;
+            if (!cbs) throw new Error('unknown event: ' + ev);
             cbs[i] = null;
         },
 
@@ -1009,7 +1009,6 @@ const settingsDescriptor = {
         
         handleOnClick() {
             this.calculateAction();
-            return;
         }
         onTimeUpdate() {
             if (!this.active) return;
